@@ -1,0 +1,224 @@
+/* ------------------------------------------------------------------
+   Style wheel — floating Concepts-style ring, left center
+------------------------------------------------------------------ */
+#styleWheel {
+  position: fixed;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 200px;
+  height: 200px;
+  z-index: 12;
+  user-select: none;
+  filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.45));
+}
+
+#styleWheel svg {
+  display: block;
+  overflow: visible;
+}
+
+/* Ring band — frosted dark glass, also the reposition drag surface */
+#styleWheel .sw-band {
+  stroke: rgba(28, 28, 33, 0.92);
+  cursor: grab;
+}
+
+#styleWheel .sw-band:active {
+  cursor: grabbing;
+}
+
+#styleWheel .sw-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 4;
+  stroke-linecap: round;
+  cursor: pointer;
+}
+
+#styleWheel .sw-tick {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+#styleWheel .sw-handle {
+  fill: #e8e8ee;
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+#styleWheel .sw-handle:hover {
+  fill: #ffffff;
+}
+
+/* Center color disc */
+#wheelColor {
+  appearance: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  padding: 0;
+}
+
+#wheelColor:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* Readouts inside the band */
+.wheel-readout {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.wheel-readout-size { top: -16px; }
+.wheel-readout-opacity { bottom: -16px; }
+
+/* Medium selector — pen / marker / pencil / chalk */
+#wheelMedia {
+  position: absolute;
+  left: 50%;
+  bottom: -38px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(28, 28, 33, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+#wheelMedia button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #9a9aa4;
+  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+#wheelMedia button:hover { background: rgba(255, 255, 255, 0.07); color: #e6e6e6; }
+#wheelMedia button.active { background: rgba(90, 160, 255, 0.22); color: #9cc8ff; }
+
+/* ------------------------------------------------------------------
+   Color flyout — HSL disk / RGB sliders / marker palette
+------------------------------------------------------------------ */
+#colorPicker {
+  position: fixed;
+  z-index: 15;
+  width: 208px;
+  padding: 10px;
+  background: rgba(24, 24, 28, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+  user-select: none;
+}
+
+#colorPicker.hidden { display: none; }
+
+.cp-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.cp-tabs button {
+  appearance: none;
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #9a9aa4;
+  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 6px 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cp-tabs button:hover { background: rgba(255, 255, 255, 0.07); color: #e6e6e6; }
+.cp-tabs button.active { background: rgba(90, 160, 255, 0.22); color: #9cc8ff; }
+
+.cp-pane.hidden { display: none; }
+
+.cp-disk {
+  display: block;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  cursor: crosshair;
+}
+
+.cp-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #b8b8c0;
+}
+
+.cp-slider-row input[type="range"] {
+  flex: 1;
+  accent-color: #5aa0ff;
+}
+
+.cp-hex-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #b8b8c0;
+}
+
+.cp-hex-row input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e6e6e6;
+  border-radius: 6px;
+  padding: 5px 6px;
+  font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  width: 70px;
+}
+
+.cp-hex-row input:focus {
+  outline: none;
+  border-color: rgba(120, 200, 255, 0.6);
+}
+
+.cp-markers {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.cp-swatch {
+  appearance: none;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  padding: 0;
+}
+
+.cp-swatch:hover {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 1px;
+}

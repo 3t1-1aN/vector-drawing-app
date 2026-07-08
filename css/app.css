@@ -1,0 +1,324 @@
+/* ------------------------------------------------------------------
+   Reset & layout — eliminate scrollbars/margins so the canvas fills
+   the viewport without distortion.
+------------------------------------------------------------------ */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #1e1e22;
+  color: #e6e6e6;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+#stage {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: default;
+  touch-action: none;
+}
+
+#stage.panning { cursor: grabbing; }
+#stage.pannable { cursor: grab; }
+
+/* ------------------------------------------------------------------
+   Toolbar — floating, top-center
+------------------------------------------------------------------ */
+#toolbar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: rgba(20, 20, 24, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  z-index: 10;
+  user-select: none;
+}
+
+#toolbar button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #b8b8c0;
+  font: 500 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 8px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#toolbar button:hover { background: rgba(255, 255, 255, 0.07); color: #e6e6e6; }
+#toolbar button.active { background: rgba(90, 160, 255, 0.22); color: #9cc8ff; }
+
+#toolbar .kbd {
+  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+/* ------------------------------------------------------------------
+   Side panel — precision / scale settings
+------------------------------------------------------------------ */
+#panel {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 220px;
+  padding: 12px;
+  background: rgba(20, 20, 24, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  z-index: 10;
+  user-select: none;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#panel h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a8a96;
+  font-weight: 600;
+}
+
+#panel .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#panel label { color: #b8b8c0; }
+
+#panel select,
+#panel input[type="number"] {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e6e6e6;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  width: 92px;
+}
+
+#panel .actions { display: flex; flex-direction: column; gap: 6px; }
+
+#panel .actions button {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cfcfd6;
+  font: 500 12px/1 inherit;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+#panel .actions button:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+#panel .hint {
+  color: #6a6a74;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Workspace: background swatches + grid controls */
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swatch-row button {
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  padding: 0;
+}
+
+.swatch-row button:hover { border-color: rgba(255, 255, 255, 0.4); }
+.swatch-row button.active {
+  border-color: #9cc8ff;
+  box-shadow: 0 0 0 2px rgba(90, 160, 255, 0.35);
+}
+
+.swatch-row button.swatch-transparent {
+  background:
+    linear-gradient(45deg, #3a3a42 25%, transparent 25%, transparent 75%, #3a3a42 75%),
+    linear-gradient(45deg, #3a3a42 25%, #26262b 25%, #26262b 75%, #3a3a42 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 5px 5px;
+}
+
+.swatch-row button.swatch-custom {
+  background: conic-gradient(#f66, #fc6, #6d6, #6cf, #96f, #f66);
+}
+
+.hidden-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.grid-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.grid-controls select { width: 92px; }
+
+/* Concepts-style circular on/off toggle */
+.circle-toggle {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+
+.circle-toggle:hover { border-color: rgba(255, 255, 255, 0.55); }
+
+.circle-toggle[aria-pressed="true"] {
+  border-color: #9cc8ff;
+}
+
+.circle-toggle[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #5aa0ff;
+}
+
+/* ------------------------------------------------------------------
+   Measurement editor dialog (double-click a shape)
+------------------------------------------------------------------ */
+#measureDialog {
+  position: fixed;
+  z-index: 20;
+  min-width: 200px;
+  padding: 12px;
+  background: rgba(20, 20, 24, 0.95);
+  border: 1px solid rgba(120, 200, 255, 0.35);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+#measureDialog.hidden { display: none; }
+
+#measureDialog h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9cc8ff;
+  margin-bottom: 10px;
+  text-transform: capitalize;
+}
+
+#measureFields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.measure-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.measure-row label {
+  font-size: 12px;
+  color: #b8b8c0;
+  white-space: nowrap;
+}
+
+.measure-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.measure-input-wrap input {
+  width: 80px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e6e6e6;
+  border-radius: 6px;
+  padding: 5px 6px;
+  font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.measure-input-wrap input:focus {
+  outline: none;
+  border-color: rgba(120, 200, 255, 0.6);
+}
+
+.measure-unit {
+  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #8a8a96;
+}
+
+.measure-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.measure-actions button {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cfcfd6;
+  font: 500 12px/1 inherit;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.measure-actions button:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+.measure-actions button.primary {
+  background: rgba(90, 160, 255, 0.25);
+  border-color: rgba(120, 200, 255, 0.4);
+  color: #9cc8ff;
+}
+
+.measure-actions button.primary:hover {
+  background: rgba(90, 160, 255, 0.4);
+}

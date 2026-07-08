@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vector Drawing App — Concepts-like</title>
+  <link rel="stylesheet" href="./css/app.css" />
+  <link rel="stylesheet" href="./css/style-wheel.css" />
+</head>
+<body>
+  <canvas id="stage"></canvas>
+
+  <!-- Tool selection. The active tool decides what a plain left-drag does. -->
+  <div id="toolbar">
+    <button data-tool="select">Select <span class="kbd">V</span></button>
+    <button data-tool="line" class="active">Line <span class="kbd">L</span></button>
+    <button data-tool="rect">Rect <span class="kbd">R</span></button>
+    <button data-tool="circle">Circle <span class="kbd">C</span></button>
+    <button data-tool="pen">Pen <span class="kbd">P</span></button>
+    <button data-tool="nudge">Nudge <span class="kbd">N</span></button>
+    <button data-tool="slice">Slice <span class="kbd">S</span></button>
+  </div>
+
+  <!-- Precision + project panel. -->
+  <div id="panel">
+    <h2>Workspace</h2>
+    <div class="row">
+      <label>Background</label>
+    </div>
+    <div id="bgSwatches" class="swatch-row"></div>
+    <input id="bgCustomColor" type="color" value="#f5f0e8" class="hidden-input" />
+    <div class="row">
+      <label for="gridType">Grid</label>
+      <div class="grid-controls">
+        <select id="gridType">
+          <option value="graph">Graph</option>
+          <option value="dot">Dot</option>
+          <option value="lined">Lined</option>
+          <option value="isometric">Isometric</option>
+        </select>
+        <button id="gridToggle" class="circle-toggle" aria-pressed="true" title="Toggle grid"></button>
+      </div>
+    </div>
+    <h2>Precision</h2>
+    <div class="row">
+      <label for="unit">Unit</label>
+      <select id="unit">
+        <option value="m">meters</option>
+        <option value="mm">millimeters</option>
+        <option value="cm">centimeters</option>
+        <option value="ft">feet</option>
+        <option value="in">inches</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="scale">1 unit =</label>
+      <input id="scale" type="number" min="0.0001" step="0.1" value="1" />
+    </div>
+    <div class="row">
+      <label for="showDims">Dimensions</label>
+      <select id="showDims">
+        <option value="cad">CAD</option>
+        <option value="labels">Labels</option>
+        <option value="off">Off</option>
+      </select>
+    </div>
+    <h2>Artboard</h2>
+    <div class="actions">
+      <button id="addArtboard">+ Add artboard at view</button>
+      <button id="fitArtboard">Zoom to fit all</button>
+    </div>
+    <h2>Project</h2>
+    <div class="actions">
+      <button id="saveProject">Save .vda</button>
+      <button id="loadProject">Load .vda…</button>
+      <button id="exportSvg">Export SVG</button>
+    </div>
+    <div class="hint">
+      Pan: Space+drag or middle-drag. Zoom: wheel. Undo/redo: Ctrl+Z / Ctrl+Shift+Z. Delete: Del. Duplicate: Ctrl+D. Double-click a shape to edit its measurement.
+    </div>
+  </div>
+
+  <!-- Measurement editor — opens on double-click of a shape. -->
+  <div id="measureDialog" class="hidden" role="dialog" aria-labelledby="measureTitle">
+    <form id="measureForm">
+      <h3 id="measureTitle">Edit measurement</h3>
+      <div id="measureFields"></div>
+      <div class="measure-actions">
+        <button type="button" id="measureCancel">Cancel</button>
+        <button type="submit" class="primary">Apply</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ES module entry. Serves the modular app; run via a local server
+       (e.g. `python3 -m http.server` in this folder) so module imports
+       resolve. Opening index.html directly over file:// will not work. -->
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
