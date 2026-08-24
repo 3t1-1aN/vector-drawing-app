@@ -12,7 +12,9 @@ import { MEDIUMS } from "../brush/mediums.js";
 import { StyleCommand } from "../scene/scene.js";
 import {
   initColorPicker, openColorPicker, closeColorPicker, isColorPickerOpen,
+  setColorSampler,
 } from "./color-picker.js";
+import { sampleScreen } from "../io/sampler.js";
 
 const SIZE = 200;
 const C = SIZE / 2;
@@ -255,7 +257,10 @@ function buildDom() {
       closeColorPicker();
       return;
     }
-    openColorPicker(root.getBoundingClientRect(), currentStyle().stroke);
+    // The color rings open centered on the hub; slide the wheel to a spot
+    // where the full 460px ring overlay fits on-screen first, then anchor.
+    ensureRoomForRings();
+    openColorPicker(colorBtn.getBoundingClientRect(), currentStyle().stroke);
   });
 
   // Click anywhere else closes the color flyout.
@@ -295,6 +300,28 @@ function restorePosition() {
   } catch { /* ignore corrupt state */ }
 }
 
+// The color ring overlay is 460px and opens centered on the hub. If the
+// wheel is docked where that would clip off-screen, slide it to the nearest
+// position with enough room (and persist it like a manual move).
+const RING_RADIUS = 230;
+function ensureRoomForRings() {
+  const rect = root.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const minCx = RING_RADIUS + 4;
+  const minCy = RING_RADIUS + 4;
+  const maxCx = window.innerWidth - RING_RADIUS - 4;
+  const maxCy = window.innerHeight - RING_RADIUS - 4;
+  const ncx = Math.max(minCx, Math.min(cx, Math.max(minCx, maxCx)));
+  const ncy = Math.max(minCy, Math.min(cy, Math.max(minCy, maxCy)));
+  if (ncx === cx && ncy === cy) return;
+  root.style.left = `${ncx - rect.width / 2}px`;
+  root.style.top = `${ncy - rect.height / 2}px`;
+  root.style.transform = "none";
+  const r2 = root.getBoundingClientRect();
+  localStorage.setItem("vda.wheelPos", JSON.stringify({ x: r2.left, y: r2.top }));
+}
+
 // --- Sync -----------------------------------------------------------------
 
 function syncUi(force) {
@@ -330,6 +357,9 @@ function syncUi(force) {
 export function initStyleWheel(app) {
   appRef = app;
   if (!root) buildDom();
+  // Eyedropper samples the rendered scene offscreen (the live canvas is
+  // cleared each frame, so direct getImageData is unreliable).
+  setColorSampler((x, y) => sampleScreen(app.scene, x, y));
   syncUi(true);
 }
 

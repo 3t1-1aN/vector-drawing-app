@@ -117,108 +117,159 @@
 #wheelMedia button.active { background: rgba(90, 160, 255, 0.22); color: #9cc8ff; }
 
 /* ------------------------------------------------------------------
-   Color flyout — HSL disk / RGB sliders / marker palette
+   Color wheel overlay — Concepts-style concentric rings around the hub
 ------------------------------------------------------------------ */
-#colorPicker {
+#colorWheelOverlay {
   position: fixed;
+  width: 460px;
+  height: 460px;
   z-index: 15;
-  width: 208px;
-  padding: 10px;
-  background: rgba(24, 24, 28, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
   user-select: none;
+  pointer-events: none;
 }
 
-#colorPicker.hidden { display: none; }
+#colorWheelOverlay.hidden { display: none; }
 
-.cp-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 10px;
-}
-
-.cp-tabs button {
-  appearance: none;
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: #9a9aa4;
-  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  padding: 6px 0;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.cp-tabs button:hover { background: rgba(255, 255, 255, 0.07); color: #e6e6e6; }
-.cp-tabs button.active { background: rgba(90, 160, 255, 0.22); color: #9cc8ff; }
-
-.cp-pane.hidden { display: none; }
-
-.cp-disk {
+#colorWheelOverlay svg {
   display: block;
-  margin: 0 auto 10px;
-  border-radius: 50%;
-  cursor: crosshair;
+  overflow: visible;
+  pointer-events: none;
 }
 
-.cp-slider-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+#colorWheelOverlay .cp-hit {
+  fill: transparent;
+  pointer-events: all;
+}
+
+/* Invisible but clickable surfaces inside the SVG */
+#colorWheelOverlay .cp-track,
+#colorWheelOverlay .cp-mode-btn,
+#colorWheelOverlay .cp-chip,
+#colorWheelOverlay .cp-value {
+  pointer-events: all;
+}
+
+/* Mode icon ring */
+.cp-icon-track {
+  fill: none;
+  stroke: rgba(28, 28, 33, 0.72);
+  stroke-width: 34;
+}
+
+.cp-mode-dot {
+  fill: rgba(38, 38, 44, 0.94);
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 1;
+}
+
+.cp-mode-btn:hover .cp-mode-dot { fill: rgba(52, 52, 60, 0.98); }
+.cp-mode-btn.active .cp-mode-dot {
+  fill: rgba(90, 160, 255, 0.30);
+  stroke: rgba(140, 190, 255, 0.65);
+}
+
+.cp-mode-label {
+  font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  fill: #cfd2dd;
+  pointer-events: none;
+}
+
+.cp-mode-btn.active .cp-mode-label { fill: #cfe2ff; }
+
+/* Slider handles */
+.cp-handle {
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 2;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+  pointer-events: none;
+}
+
+/* Value labels on arcs */
+.cp-value {
   font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #b8b8c0;
+  fill: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  cursor: text;
 }
 
-.cp-slider-row input[type="range"] {
-  flex: 1;
-  accent-color: #5aa0ff;
-}
+.cp-value-top { x: 230px; y: 34px; }
+.cp-value-bottom { x: 230px; y: 432px; }
 
-.cp-hex-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #b8b8c0;
-}
-
-.cp-hex-row input {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #e6e6e6;
+/* Inline numeric editor */
+.cp-inline-edit {
+  position: fixed;
+  z-index: 40;
+  width: 52px;
+  height: 24px;
+  background: rgba(20, 20, 24, 0.96);
+  border: 1px solid rgba(120, 200, 255, 0.6);
   border-radius: 6px;
-  padding: 5px 6px;
-  font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  width: 70px;
+  color: #e6e6e6;
+  font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+  padding: 0 4px;
 }
 
-.cp-hex-row input:focus {
-  outline: none;
-  border-color: rgba(120, 200, 255, 0.6);
+.cp-inline-edit:focus { outline: none; }
+
+/* Marker wheel chips */
+.cp-chip {
+  stroke: rgba(0, 0, 0, 0.4);
+  stroke-width: 1;
 }
 
-.cp-markers {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
+.cp-chip:hover {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 2;
 }
 
-.cp-swatch {
-  appearance: none;
+.cp-marker-spin { will-change: transform; }
+
+/* Eyedropper loupe */
+.cp-loupe {
+  position: fixed;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  overflow: hidden;
+  z-index: 60;
+  pointer-events: none;
+  border: 3px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.cp-loupe-half {
+  position: absolute;
+  left: 0;
   width: 100%;
-  aspect-ratio: 1;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.35);
-  cursor: pointer;
-  padding: 0;
+  height: 50%;
 }
 
-.cp-swatch:hover {
-  outline: 2px solid rgba(255, 255, 255, 0.6);
-  outline-offset: 1px;
+.cp-loupe-new { top: 0; }
+.cp-loupe-cur { bottom: 0; }
+
+.cp-loupe-cross {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+}
+
+.cp-loupe-cross::before,
+.cp-loupe-cross::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+}
+
+.cp-loupe-cross::before { left: 6px; top: 0; width: 2px; height: 14px; }
+.cp-loupe-cross::after { left: 0; top: 6px; width: 14px; height: 2px; }
+
+/* While eyedropping, the canvas shows a sampling cursor */
+body.cp-eyedropping,
+body.cp-eyedropping #stage {
+  cursor: crosshair !important;
 }

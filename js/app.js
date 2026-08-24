@@ -41,6 +41,7 @@ import { sliceTool } from "./tools/slice.js";
 import { exportSvg, downloadText } from "./io/export-svg.js";
 import { serializeProject, deserializeProject, pickFile, readFileText } from "./io/project.js";
 import { openMeasureDialog, closeMeasureDialog, isOpen as measureDialogOpen } from "./ui/measure-dialog.js";
+import { isEyedropperActive } from "./ui/color-picker.js";
 
 // --- Register tools ----------------------------------------------------
 registerTool("select", selectTool);
@@ -229,6 +230,8 @@ canvas.addEventListener("mousedown", (event) => {
     canvas.classList.add("panning");
     return;
   }
+  // While the color eyedropper is sampling, don't start a stroke.
+  if (isEyedropperActive()) return;
   const tool = getTool(activeTool);
   if (tool && tool.onPointerDown) tool.onPointerDown(app, event);
 });
@@ -240,6 +243,7 @@ window.addEventListener("mousemove", (event) => {
     interaction.lastY = event.clientY;
     return;
   }
+  if (isEyedropperActive()) return;
   const tool = getTool(activeTool);
   if (tool && tool.onPointerMove) tool.onPointerMove(app, event);
 });
