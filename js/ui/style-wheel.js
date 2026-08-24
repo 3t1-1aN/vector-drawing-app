@@ -43,12 +43,16 @@ let svg = null;
 let colorBtn = null;
 let toolRing = null;
 let popover = null;
+let tooltip = null;
 
 let appRef = null;
 let dragging = null; // "size" | "opacity" | "smoothing" | "move" | null
 let moveOffset = { x: 0, y: 0 };
 let pendingStyleCmd = null;
 let openPopoverKind = null; // "medium" | "size" | "opacity" | "smoothing" | null
+let popoverPinned = false;  // true after a click; hover-peek leaves it transient
+let hoverTimer = null;
+let hoverOutTimer = null;
 
 const propHandles = {};
 const propReadouts = {};
@@ -176,8 +180,15 @@ function buildToolRing() {
     btn.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
+      hideTooltip();
       onToolSlot(t.id);
     });
+    // Hover previews the tool name + shortcut; smooth fade via CSS.
+    btn.addEventListener("mouseenter", (e) => {
+      showTooltip(`${t.label} · ${t.kbd}`, e.clientX, e.clientY);
+    });
+    btn.addEventListener("mousemove", (e) => positionTooltip(e.clientX, e.clientY));
+    btn.addEventListener("mouseleave", hideTooltip);
     toolRing.appendChild(btn);
   });
 
@@ -230,32 +241,43 @@ function buildPropRing() {
     });
     track.addEventListener("mousedown", (e) => {
       dragging = def.key;
+      cancelHoverPeek();
       beginStyleEdit();
       updatePropFromPointer(e);
       e.preventDefault();
       e.stopPropagation();
     });
-    // Tap (click without drag) opens the preset slider popover.
+    // Tap (click without drag) pins the preset slider popover open.
     track.addEventListener("click", (e) => {
       e.stopPropagation();
-      togglePopover(def.key);
+      cancelHoverPeek();
+      togglePopover(def.key, true);
     });
+    // Hover peeks the slider after a short intent delay; leaving dismisses
+    // it unless it was pinned by a click.
+    track.addEventListener("mouseenter", () => scheduleHoverPeek(def.key));
+    track.addEventListener("mouseleave", scheduleHoverDismiss);
     g.appendChild(track);
 
     const handle = svgEl("circle", { r: 8, class: `sw-handle sw-handle-${def.cls}` });
     handle.addEventListener("mousedown", (e) => {
       dragging = def.key;
+      cancelHoverPeek();
       beginStyleEdit();
       updatePropFromPointer(e);
       e.preventDefault();
       e.stopPropagation();
     });
+    handle.addEventListener("mouseenter", () => scheduleHoverPeek(def.key));
+    handle.addEventListener("mouseleave", scheduleHoverDismiss);
     g.appendChild(handle);
     propHandles[def.key] = handle;
 
     const readout = svgEl("text", { class: `sw-readout sw-readout-${def.cls}`, "text-anchor": "middle" });
     readout.addEventListener("mousedown", (e) => e.stopPropagation());
-    readout.addEventListener("click", (e) => { e.stopPropagation(); togglePopover(def.key); });
+    readout.addEventListener("click", (e) => { e.stopPropagation(); cancelHoverPeek(); togglePopover(def.key, true); });
+    readout.addEventListener("mouseenter", () => scheduleHoverPeek(def.key));
+    readout.addEventListener("mouseleave", scheduleHoverDismiss);
     g.appendChild(readout);
     propReadouts[def.key] = readout;
   }
@@ -397,15 +419,85 @@ const PRESETS = {
   smoothing: [0, 0.33, 0.66, 1],
 };
 
-function togglePopover(kind) {
-  if (openPopoverKind === kind) { closePopover(); return; }
+function togglePopover(kind, pinned) {
+  if (openPopoverKind === kind && popoverPinned) { closePopover(); return; }
   openPopoverKind = kind;
+  popoverPinned = !!pinned;
+  buildPopover(kind);
+}
+
+function openPopoverPeek(kind) {
+  openPopoverKind = kind;
+  popoverPinned = false;
   buildPopover(kind);
 }
 
 function closePopover() {
   openPopoverKind = null;
+  popoverPinned = false;
   if (popover) { popover.remove(); popover = null; }
+}
+
+// Hover intent: brief delay before peeking so a passing cursor doesn't flash
+// the popover; a grace period on mouse-out so you can move into the popover.
+const HOVER_PEEK_MS = 260;
+const HOVER_DISMISS_MS = 180;
+
+function scheduleHoverPeek(kind) {
+  cancelHoverPeek();
+  clearTimeout(hoverOutTimer);
+  hoverTimer = setTimeout(() => {
+    if (dragging) return;
+    openPopoverPeek(kind);
+  }, HOVER_PEEK_MS);
+}
+
+function scheduleHoverDismiss() {
+  clearTimeout(hoverTimer);
+  hoverTimer = null;
+  clearTimeout(hoverOutTimer);
+  hoverOutTimer = setTimeout(() => {
+    if (!popoverPinned) closePopover();
+  }, HOVER_DISMISS_MS);
+}
+
+function cancelHoverPeek() {
+  clearTimeout(hoverTimer);
+  hoverTimer = null;
+  clearTimeout(hoverOutTimer);
+}
+
+// --- Tooltip ----------------------------------------------------------------
+
+function ensureTooltip() {
+  if (tooltip) return tooltip;
+  tooltip = document.createElement("div");
+  tooltip.id = "wheelTooltip";
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function showTooltip(text, x, y) {
+  const tt = ensureTooltip();
+  tt.textContent = text;
+  tt.classList.add("visible");
+  positionTooltip(x, y);
+}
+
+function positionTooltip(x, y) {
+  if (!tooltip) return;
+  const pad = 12;
+  const rect = tooltip.getBoundingClientRect();
+  let left = x - rect.width / 2;
+  let top = y - rect.height - 26;
+  left = Math.max(pad, Math.min(left, window.innerWidth - rect.width - pad));
+  if (top < pad) top = y + 26; // flip below if near the top edge
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function hideTooltip() {
+  if (tooltip) tooltip.classList.remove("visible");
 }
 
 function buildPopover(kind) {
@@ -413,6 +505,9 @@ function buildPopover(kind) {
   popover = document.createElement("div");
   popover.id = "wheelPopover";
   popover.addEventListener("mousedown", (e) => e.stopPropagation());
+  // Moving into the popover keeps it open; leaving dismisses if not pinned.
+  popover.addEventListener("mouseenter", cancelHoverPeek);
+  popover.addEventListener("mouseleave", scheduleHoverDismiss);
 
   if (kind === "medium") {
     popover.classList.add("wheel-popover-media");
@@ -477,8 +572,9 @@ function buildPopover(kind) {
   const rect = root.getBoundingClientRect();
   popover.style.left = `${rect.right + 12}px`;
   popover.style.top = `${rect.top + rect.height / 2}px`;
-  popover.style.transform = "translateY(-50%)";
   document.body.appendChild(popover);
+  // Trigger the entrance transition on the next frame.
+  requestAnimationFrame(() => popover && popover.classList.add("visible"));
 }
 
 // --- Sync ----------------------------------------------------------------------

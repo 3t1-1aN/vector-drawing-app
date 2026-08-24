@@ -722,10 +722,12 @@ export function openColorPicker(anchorRect, color) {
   root.style.left = `${cx - SIZE / 2}px`;
   root.style.top = `${cy - SIZE / 2}px`;
   syncUi();
+  requestAnimationFrame(() => root && root.classList.add("open"));
 }
 
 export function closeColorPicker() {
   if (root) root.classList.add("hidden");
+  if (root) root.classList.remove("open");
 }
 
 export function isColorPickerOpen() {

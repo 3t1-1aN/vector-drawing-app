@@ -32,20 +32,31 @@
   fill: rgba(38, 38, 44, 0.94);
   stroke: rgba(255, 255, 255, 0.13);
   stroke-width: 1;
+  transition: fill 0.15s ease, stroke 0.15s ease, r 0.15s ease;
 }
 
-#styleWheel .sw-tool:hover .sw-tool-dot { fill: rgba(52, 52, 60, 0.98); }
+#styleWheel .sw-tool:hover .sw-tool-dot {
+  fill: rgba(64, 64, 74, 1);
+  stroke: rgba(255, 255, 255, 0.32);
+}
+
 #styleWheel .sw-tool.active .sw-tool-dot {
   fill: rgba(90, 160, 255, 0.30);
   stroke: rgba(140, 190, 255, 0.7);
+}
+
+#styleWheel .sw-tool.active:hover .sw-tool-dot {
+  fill: rgba(90, 160, 255, 0.42);
 }
 
 #styleWheel .sw-tool-label {
   font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   fill: #cfd2dd;
   pointer-events: none;
+  transition: fill 0.15s ease;
 }
 
+#styleWheel .sw-tool:hover .sw-tool-label { fill: #ffffff; }
 #styleWheel .sw-tool.active .sw-tool-label { fill: #cfe2ff; }
 
 /* Undo / redo on the ring axis */
@@ -69,9 +80,13 @@
   stroke-width: 5;
   stroke-linecap: round;
   cursor: pointer;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
-#styleWheel .sw-track:hover { stroke: rgba(255, 255, 255, 0.26); }
+#styleWheel .sw-track:hover {
+  stroke: rgba(255, 255, 255, 0.32);
+  stroke-width: 6.5;
+}
 
 #styleWheel .sw-handle {
   fill: #e8e8ee;
@@ -79,9 +94,10 @@
   stroke-width: 1.5;
   cursor: pointer;
   pointer-events: all;
+  transition: r 0.15s ease, fill 0.15s ease;
 }
 
-#styleWheel .sw-handle:hover { fill: #ffffff; }
+#styleWheel .sw-handle:hover { fill: #ffffff; r: 9.5; }
 
 #styleWheel .sw-readout {
   font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -89,7 +105,10 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   cursor: pointer;
   pointer-events: all;
+  transition: fill 0.15s ease;
 }
+
+#styleWheel .sw-readout:hover { fill: #ffffff; }
 
 /* Center color disc */
 #wheelColor {
@@ -105,9 +124,35 @@
   box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.28);
   cursor: pointer;
   padding: 0;
+  transition: border-color 0.15s ease, box-shadow 0.2s ease;
 }
 
-#wheelColor:hover { border-color: rgba(255, 255, 255, 0.4); }
+#wheelColor:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.28), 0 0 0 6px rgba(255, 255, 255, 0.06);
+}
+
+/* Hover tooltip for tool slots */
+#wheelTooltip {
+  position: fixed;
+  z-index: 30;
+  padding: 5px 9px;
+  background: rgba(20, 20, 24, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #e6e6ea;
+  font: 500 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+#wheelTooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
 
 /* ------------------------------------------------------------------
    Hub popovers — medium picker + property preset sliders
@@ -122,6 +167,14 @@
   backdrop-filter: blur(8px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   user-select: none;
+  transform: translateY(-50%) translateX(-6px);
+  opacity: 0;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+#wheelPopover.visible {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
 }
 
 /* Medium list */
@@ -176,6 +229,14 @@
   z-index: 15;
   user-select: none;
   pointer-events: none;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+#colorWheelOverlay.open {
+  opacity: 1;
+  transform: scale(1);
 }
 
 #colorWheelOverlay.hidden { display: none; }
@@ -210,9 +271,14 @@
   fill: rgba(38, 38, 44, 0.94);
   stroke: rgba(255, 255, 255, 0.14);
   stroke-width: 1;
+  transition: fill 0.15s ease, stroke 0.15s ease;
 }
 
-.cp-mode-btn:hover .cp-mode-dot { fill: rgba(52, 52, 60, 0.98); }
+.cp-mode-btn:hover .cp-mode-dot {
+  fill: rgba(58, 58, 68, 1);
+  stroke: rgba(255, 255, 255, 0.35);
+}
+
 .cp-mode-btn.active .cp-mode-dot {
   fill: rgba(90, 160, 255, 0.30);
   stroke: rgba(140, 190, 255, 0.65);
@@ -222,8 +288,10 @@
   font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   fill: #cfd2dd;
   pointer-events: none;
+  transition: fill 0.15s ease;
 }
 
+.cp-mode-btn:hover .cp-mode-label { fill: #ffffff; }
 .cp-mode-btn.active .cp-mode-label { fill: #cfe2ff; }
 
 /* Slider handles */
@@ -266,11 +334,13 @@
 .cp-chip {
   stroke: rgba(0, 0, 0, 0.4);
   stroke-width: 1;
+  transition: r 0.12s ease, stroke 0.12s ease;
 }
 
 .cp-chip:hover {
-  stroke: rgba(255, 255, 255, 0.85);
+  stroke: rgba(255, 255, 255, 0.9);
   stroke-width: 2;
+  r: 12;
 }
 
 .cp-marker-spin { will-change: transform; }
