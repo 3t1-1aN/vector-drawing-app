@@ -1,13 +1,14 @@
 /* ------------------------------------------------------------------
-   Style wheel — floating Concepts-style ring, left center
+   Style hub — floating Concepts-style wheel: outer tool ring, inner
+   property ring, center color disc. Replaces the top toolbar.
 ------------------------------------------------------------------ */
 #styleWheel {
   position: fixed;
   left: 20px;
   top: 50%;
   transform: translateY(-50%);
-  width: 200px;
-  height: 200px;
+  width: 300px;
+  height: 300px;
   z-index: 12;
   user-select: none;
   filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.45));
@@ -18,39 +19,76 @@
   overflow: visible;
 }
 
-/* Ring band — frosted dark glass, also the reposition drag surface */
+/* Tool ring band — frosted dark glass, also the reposition drag surface */
 #styleWheel .sw-band {
   stroke: rgba(28, 28, 33, 0.92);
   cursor: grab;
 }
 
-#styleWheel .sw-band:active {
-  cursor: grabbing;
+#styleWheel .sw-band:active { cursor: grabbing; }
+
+/* Tool slots on the outer ring */
+#styleWheel .sw-tool-dot {
+  fill: rgba(38, 38, 44, 0.94);
+  stroke: rgba(255, 255, 255, 0.13);
+  stroke-width: 1;
 }
 
+#styleWheel .sw-tool:hover .sw-tool-dot { fill: rgba(52, 52, 60, 0.98); }
+#styleWheel .sw-tool.active .sw-tool-dot {
+  fill: rgba(90, 160, 255, 0.30);
+  stroke: rgba(140, 190, 255, 0.7);
+}
+
+#styleWheel .sw-tool-label {
+  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  fill: #cfd2dd;
+  pointer-events: none;
+}
+
+#styleWheel .sw-tool.active .sw-tool-label { fill: #cfe2ff; }
+
+/* Undo / redo on the ring axis */
+#styleWheel .sw-ringbtn-dot {
+  fill: rgba(38, 38, 44, 0.9);
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+
+#styleWheel .sw-ringbtn:hover .sw-ringbtn-dot { fill: rgba(52, 52, 60, 0.98); }
+#styleWheel .sw-ringbtn-label {
+  font: 600 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  fill: #b9bdc9;
+  pointer-events: none;
+}
+
+/* Property ring tracks (size / opacity / smoothing) */
 #styleWheel .sw-track {
   fill: none;
   stroke: rgba(255, 255, 255, 0.14);
-  stroke-width: 4;
+  stroke-width: 5;
   stroke-linecap: round;
   cursor: pointer;
 }
 
-#styleWheel .sw-tick {
-  stroke: rgba(255, 255, 255, 0.22);
-  stroke-width: 1.5;
-  pointer-events: none;
-}
+#styleWheel .sw-track:hover { stroke: rgba(255, 255, 255, 0.26); }
 
 #styleWheel .sw-handle {
   fill: #e8e8ee;
   stroke: rgba(0, 0, 0, 0.45);
   stroke-width: 1.5;
   cursor: pointer;
+  pointer-events: all;
 }
 
-#styleWheel .sw-handle:hover {
-  fill: #ffffff;
+#styleWheel .sw-handle:hover { fill: #ffffff; }
+
+#styleWheel .sw-readout {
+  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  fill: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  pointer-events: all;
 }
 
 /* Center color disc */
@@ -60,61 +98,73 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 108px;
-  height: 108px;
+  width: 124px;
+  height: 124px;
   border-radius: 50%;
   border: 3px solid rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.28);
   cursor: pointer;
   padding: 0;
 }
 
-#wheelColor:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-}
+#wheelColor:hover { border-color: rgba(255, 255, 255, 0.4); }
 
-/* Readouts inside the band */
-.wheel-readout {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: rgba(255, 255, 255, 0.75);
-  pointer-events: none;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-
-.wheel-readout-size { top: -16px; }
-.wheel-readout-opacity { bottom: -16px; }
-
-/* Medium selector — pen / marker / pencil / chalk */
-#wheelMedia {
-  position: absolute;
-  left: 50%;
-  bottom: -38px;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  background: rgba(28, 28, 33, 0.92);
+/* ------------------------------------------------------------------
+   Hub popovers — medium picker + property preset sliders
+------------------------------------------------------------------ */
+#wheelPopover {
+  position: fixed;
+  z-index: 16;
+  padding: 8px;
+  background: rgba(24, 24, 28, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  user-select: none;
 }
 
-#wheelMedia button {
+/* Medium list */
+#wheelPopover.wheel-popover-media { display: flex; flex-direction: column; gap: 2px; }
+
+#wheelPopover.wheel-popover-media button {
   appearance: none;
   border: none;
   background: transparent;
-  color: #9a9aa4;
-  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  padding: 5px 8px;
-  border-radius: 5px;
+  color: #c9c9d2;
+  font: 500 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+#wheelPopover.wheel-popover-media button:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+#wheelPopover.wheel-popover-media button.active { background: rgba(90, 160, 255, 0.22); color: #9cc8ff; }
+
+/* Property slider + presets */
+#wheelPopover.wheel-popover-slider { display: flex; flex-direction: column; gap: 8px; width: 200px; }
+
+#wheelPopover.wheel-popover-slider input[type="range"] {
+  width: 100%;
+  accent-color: #5aa0ff;
+}
+
+.wheel-preset-row { display: flex; gap: 4px; }
+
+.wheel-preset-row button {
+  appearance: none;
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cfcfd6;
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 6px 0;
+  border-radius: 6px;
   cursor: pointer;
 }
 
-#wheelMedia button:hover { background: rgba(255, 255, 255, 0.07); color: #e6e6e6; }
-#wheelMedia button.active { background: rgba(90, 160, 255, 0.22); color: #9cc8ff; }
+.wheel-preset-row button:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 
 /* ------------------------------------------------------------------
    Color wheel overlay — Concepts-style concentric rings around the hub

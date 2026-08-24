@@ -42,6 +42,7 @@ import { exportSvg, downloadText } from "./io/export-svg.js";
 import { serializeProject, deserializeProject, pickFile, readFileText } from "./io/project.js";
 import { openMeasureDialog, closeMeasureDialog, isOpen as measureDialogOpen } from "./ui/measure-dialog.js";
 import { isEyedropperActive } from "./ui/color-picker.js";
+import { setBrush } from "./brush/active-brush.js";
 
 // --- Register tools ----------------------------------------------------
 registerTool("select", selectTool);
@@ -79,6 +80,7 @@ const app = {
   history,
   interaction,
   get activeTool() { return activeTool; },
+  setActiveTool,
   screenToWorld,
   worldToScreen,
   snap,
@@ -96,19 +98,22 @@ function setActiveTool(name) {
   const prev = getTool(activeTool);
   if (prev && prev.onDeactivate) prev.onDeactivate(app);
   activeTool = name;
+  setBrush({ toolType: name });
   if (tool.onActivate) tool.onActivate(app);
   for (const btn of document.querySelectorAll("#toolbar button")) {
     btn.classList.toggle("active", btn.dataset.tool === name);
   }
 }
 
-// --- Toolbar wiring ----------------------------------------------------
+// --- Toolbar (legacy; tool selection now lives in the hub) --------------
 const toolbar = document.getElementById("toolbar");
-toolbar.addEventListener("click", (event) => {
-  const btn = event.target.closest("button[data-tool]");
-  if (btn) setActiveTool(btn.dataset.tool);
-});
-toolbar.addEventListener("mousedown", (event) => event.stopPropagation());
+if (toolbar) {
+  toolbar.addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-tool]");
+    if (btn) setActiveTool(btn.dataset.tool);
+  });
+  toolbar.addEventListener("mousedown", (event) => event.stopPropagation());
+}
 
 // --- Precision / project panel ----------------------------------------
 const unitSel = document.getElementById("unit");
@@ -166,6 +171,10 @@ function syncPanelFromSettings() {
 }
 
 // --- Workspace (background + grid) panel --------------------------------
+const panel = document.getElementById("panel");
+document.getElementById("panelToggle").addEventListener("click", () => {
+  panel.classList.toggle("collapsed");
+});
 const bgSwatches = document.getElementById("bgSwatches");
 const bgCustomColor = document.getElementById("bgCustomColor");
 const gridToggle = document.getElementById("gridToggle");

@@ -10,19 +10,9 @@
 <body>
   <canvas id="stage"></canvas>
 
-  <!-- Tool selection. The active tool decides what a plain left-drag does. -->
-  <div id="toolbar">
-    <button data-tool="select">Select <span class="kbd">V</span></button>
-    <button data-tool="line" class="active">Line <span class="kbd">L</span></button>
-    <button data-tool="rect">Rect <span class="kbd">R</span></button>
-    <button data-tool="circle">Circle <span class="kbd">C</span></button>
-    <button data-tool="pen">Pen <span class="kbd">P</span></button>
-    <button data-tool="nudge">Nudge <span class="kbd">N</span></button>
-    <button data-tool="slice">Slice <span class="kbd">S</span></button>
-  </div>
-
-  <!-- Precision + project panel. -->
-  <div id="panel">
+  <!-- Precision + project panel. Collapsible so the hub stays primary. -->
+  <button id="panelToggle" aria-label="Toggle panel" title="Settings">⚙</button>
+  <div id="panel" class="collapsed">
     <h2>Workspace</h2>
     <div class="row">
       <label>Background</label>

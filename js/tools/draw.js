@@ -9,6 +9,7 @@ import { screenToWorld, worldToScreen } from "../core/view.js";
 import { createIdElement, isDegenerate } from "../scene/element.js";
 import { AddElementCommand } from "../scene/scene.js";
 import { recognizeShape } from "../precision/recognize.js";
+import { activeBrush } from "../brush/active-brush.js";
 
 const PEN_SAMPLE_DIST_PX = 2;
 const HOLD_MOVE_THRESHOLD_PX = 5;
@@ -23,6 +24,7 @@ function makeState() {
     holdTimerId: null,
     holdAnchorX: 0,
     holdAnchorY: 0,
+    smooth: null, // EMA cursor while a pen stroke is in flight
   };
 }
 
@@ -60,7 +62,37 @@ function startCircle(app, event) {
 function startPen(app, event) {
   const raw = screenToWorld(event.clientX, event.clientY);
   shared.element = createIdElement("path", { points: [{ x: raw.x, y: raw.y }] });
+  shared.smooth = { x: raw.x, y: raw.y }; // EMA cursor for smoothing
   armHoldTimer(app, event.clientX, event.clientY);
+}
+
+// Exponential moving average toward the raw pointer. smoothing 0 = raw input,
+// approaching 1 = heavy lag that irons out hand jitter.
+function smoothPoint(raw, amount) {
+  if (amount <= 0) return raw;
+  const k = 1 - Math.min(0.92, amount * 0.92); // keep a floor so it stays responsive
+  shared.smooth.x += (raw.x - shared.smooth.x) * k;
+  shared.smooth.y += (raw.y - shared.smooth.y) * k;
+  return { x: shared.smooth.x, y: shared.smooth.y };
+}
+
+// Chaikin corner-cutting, run once on commit for a clean final curve at
+// higher smoothing values. Iterations scale with the smoothing amount.
+function chaikin(points, iterations) {
+  let pts = points;
+  for (let it = 0; it < iterations; it++) {
+    if (pts.length < 3) break;
+    const out = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      out.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 });
+      out.push({ x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    out.push(pts[pts.length - 1]);
+    pts = out;
+  }
+  return pts;
 }
 
 function armHoldTimer(app, sx, sy) {
@@ -89,11 +121,18 @@ function commit(app) {
   clearHold();
   const el = shared.element;
   if (el && !isDegenerate(el)) {
+    // Final pass of Chaikin corner-cutting for smoothed freehand strokes,
+    // so the committed path is clean rather than the raw EMA trace.
+    if (el.type === "path" && !shared.recognized && activeBrush.smoothing > 0.05) {
+      const iterations = 1 + Math.round(activeBrush.smoothing * 2);
+      el.points = chaikin(el.points, iterations);
+    }
     app.scene.add(el);
     app.history.push(new AddElementCommand(el));
     app.scene.clearSelection();
   }
   shared.element = null;
+  shared.smooth = null;
   shared.recognized = false;
 }
 
@@ -149,10 +188,11 @@ export const penTool = {
     if (!el) return;
     if (el.type === "path") {
       const raw = screenToWorld(event.clientX, event.clientY);
+      const pt = smoothPoint(raw, activeBrush.smoothing);
       const last = el.points[el.points.length - 1];
       const lastScreen = worldToScreen(last.x, last.y);
       const moved = Math.hypot(event.clientX - lastScreen.x, event.clientY - lastScreen.y);
-      if (moved >= PEN_SAMPLE_DIST_PX) el.points.push({ x: raw.x, y: raw.y });
+      if (moved >= PEN_SAMPLE_DIST_PX) el.points.push(pt);
       const movedFromAnchor = Math.hypot(
         event.clientX - shared.holdAnchorX,
         event.clientY - shared.holdAnchorY
