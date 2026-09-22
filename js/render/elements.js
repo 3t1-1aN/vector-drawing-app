@@ -55,8 +55,10 @@ export function traceElement(ctx, el) {
 /**
  * Draw all committed elements, then the live preview (if any), then the
  * selected-element highlight. `preview` is { element, recognized } | null.
+ * `doomed` is a set of ids the slice swipe has claimed; those draw greyed
+ * out so the whole object, not the crossed bit, reads as about to go.
  */
-export function drawScene(ctx, scene, view, preview) {
+export function drawScene(ctx, scene, view, preview, doomed) {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   beginBrushFrame();
@@ -68,8 +70,16 @@ export function drawScene(ctx, scene, view, preview) {
   // Committed elements — each rendered with its own brush preset.
   for (const el of scene.elements) {
     const selected = scene.isSelected(el.id);
-    if (!selected && !onScreen(el, visible, view)) continue;
-    if (selected) {
+    const claimed = doomed && doomed.has(el.id);
+    if (!selected && !claimed && !onScreen(el, visible, view)) continue;
+    if (claimed) {
+      // alphaScale, not globalAlpha: the brush blit replaces globalAlpha
+      // with its own, so the dimming has to travel in with the draw.
+      ctx.save();
+      ctx.filter = "grayscale(1)";
+      drawBrushElement(ctx, el, view, { alphaScale: 0.45 });
+      ctx.restore();
+    } else if (selected) {
       // Selection highlight is a plain solid outline so handles stay readable
       // regardless of the element's medium texture.
       ctx.strokeStyle = SELECTED_COLOR;

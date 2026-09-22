@@ -396,8 +396,9 @@ function render() {
   if (engineering) drawArtboardsWorld(ctx, view, scene.artboards);
   const tool = getTool(activeTool);
   const preview = tool && tool.getPreview ? tool.getPreview(app) : null;
+  const doomed = tool && tool.getDoomed ? tool.getDoomed() : null;
   drawShapeGuides(ctx, view, preview);
-  drawScene(ctx, scene, view, preview);
+  drawScene(ctx, scene, view, preview, doomed);
 
   // Screen-space overlays. The whole measurement layer is Engineer-only;
   // dimensionMode still decides its form, but only once it is on screen.
@@ -446,29 +447,42 @@ function drawEraser(ctx, er) {
   ctx.stroke();
 }
 
+function traceSlice(ctx, pts) {
+  const p0 = worldToScreen(pts[0].x, pts[0].y);
+  ctx.beginPath();
+  ctx.moveTo(p0.x, p0.y);
+  for (let i = 1; i < pts.length; i++) {
+    const p = worldToScreen(pts[i].x, pts[i].y);
+    ctx.lineTo(p.x, p.y);
+  }
+}
+
+/** Faint reach of the swipe, plus a thin centerline. The deletion signal is
+ *  the greyed object, so the swipe itself stays light. */
 function drawSliceBlade(ctx, sl) {
   const pts = sl.points;
   if (!pts || pts.length === 0) return;
   const r = Math.max(1, sl.r * view.zoom);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.strokeStyle = "rgba(255, 90, 90, 0.85)";
-  ctx.fillStyle = "rgba(255, 90, 90, 0.85)";
   if (pts.length === 1) {
     const p = worldToScreen(pts[0].x, pts[0].y);
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(70, 70, 70, 0.12)";
     ctx.fill();
+    ctx.lineWidth = 1.25;
+    ctx.strokeStyle = "rgba(40, 40, 40, 0.75)";
+    ctx.stroke();
     return;
   }
-  ctx.beginPath();
-  const p0 = worldToScreen(pts[0].x, pts[0].y);
-  ctx.moveTo(p0.x, p0.y);
-  for (let i = 1; i < pts.length; i++) {
-    const p = worldToScreen(pts[i].x, pts[i].y);
-    ctx.lineTo(p.x, p.y);
-  }
+  traceSlice(ctx, pts);
   ctx.lineWidth = r * 2;
+  ctx.strokeStyle = "rgba(70, 70, 70, 0.14)";
+  ctx.stroke();
+  traceSlice(ctx, pts);
+  ctx.lineWidth = 1.25;
+  ctx.strokeStyle = "rgba(40, 40, 40, 0.8)";
   ctx.stroke();
 }
 
