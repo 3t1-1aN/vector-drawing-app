@@ -43,6 +43,8 @@ import { serializeProject, deserializeProject, pickFile, readFileText } from "./
 import { openMeasureDialog, closeMeasureDialog, isOpen as measureDialogOpen } from "./ui/measure-dialog.js";
 import { isEyedropperActive } from "./ui/color-picker.js";
 import { setBrush } from "./brush/active-brush.js";
+import { brushCacheStats } from "./brush/cache.js";
+import { installBrushTestbed } from "./brush/testbed.js";
 
 // --- Register tools ----------------------------------------------------
 registerTool("select", selectTool);
@@ -98,21 +100,10 @@ function setActiveTool(name) {
   const prev = getTool(activeTool);
   if (prev && prev.onDeactivate) prev.onDeactivate(app);
   activeTool = name;
+  // The hub's tool ring renders from the shared style state, so publishing the
+  // change here keeps keyboard shortcuts and ring clicks in sync.
   setBrush({ toolType: name });
   if (tool.onActivate) tool.onActivate(app);
-  for (const btn of document.querySelectorAll("#toolbar button")) {
-    btn.classList.toggle("active", btn.dataset.tool === name);
-  }
-}
-
-// --- Toolbar (legacy; tool selection now lives in the hub) --------------
-const toolbar = document.getElementById("toolbar");
-if (toolbar) {
-  toolbar.addEventListener("click", (event) => {
-    const btn = event.target.closest("button[data-tool]");
-    if (btn) setActiveTool(btn.dataset.tool);
-  });
-  toolbar.addEventListener("mousedown", (event) => event.stopPropagation());
 }
 
 // --- Precision / project panel ----------------------------------------
@@ -172,8 +163,10 @@ function syncPanelFromSettings() {
 
 // --- Workspace (background + grid) panel --------------------------------
 const panel = document.getElementById("panel");
-document.getElementById("panelToggle").addEventListener("click", () => {
-  panel.classList.toggle("collapsed");
+const panelToggle = document.getElementById("panelToggle");
+panelToggle.addEventListener("click", () => {
+  const open = panel.classList.toggle("collapsed") === false;
+  panelToggle.setAttribute("aria-expanded", String(open));
 });
 const bgSwatches = document.getElementById("bgSwatches");
 const bgCustomColor = document.getElementById("bgCustomColor");
@@ -229,23 +222,33 @@ function isPanGesture(event) {
   return false;
 }
 
-canvas.addEventListener("mousedown", (event) => {
+// Pointer events rather than mouse events, because stylus pressure and
+// getCoalescedEvents() only exist here — see brush/input.js.
+//
+// Note that no handler in this path calls preventDefault() on pointerdown:
+// doing so suppresses the compatibility mouse events, which would take out
+// dblclick-to-measure and the wheel's press-outside dismissal. Text selection
+// is blocked in CSS instead, and pointer capture keeps a drag alive without
+// needing the default cancelled.
+canvas.addEventListener("pointerdown", (event) => {
+  if (!event.isPrimary) return;
   // Pan is global (works regardless of active tool).
   if (isPanGesture(event)) {
-    event.preventDefault();
     interaction.panning = true;
     interaction.lastX = event.clientX;
     interaction.lastY = event.clientY;
     canvas.classList.add("panning");
+    canvas.setPointerCapture(event.pointerId);
     return;
   }
   // While the color eyedropper is sampling, don't start a stroke.
   if (isEyedropperActive()) return;
+  canvas.setPointerCapture(event.pointerId);
   const tool = getTool(activeTool);
   if (tool && tool.onPointerDown) tool.onPointerDown(app, event);
 });
 
-window.addEventListener("mousemove", (event) => {
+window.addEventListener("pointermove", (event) => {
   if (interaction.panning) {
     panBy(event.clientX - interaction.lastX, event.clientY - interaction.lastY);
     interaction.lastX = event.clientX;
@@ -257,14 +260,26 @@ window.addEventListener("mousemove", (event) => {
   if (tool && tool.onPointerMove) tool.onPointerMove(app, event);
 });
 
-window.addEventListener("mouseup", (event) => {
+window.addEventListener("pointerup", (event) => {
   if (interaction.panning) {
     interaction.panning = false;
     canvas.classList.remove("panning");
     return;
   }
+  // The eyedropper consumes its own release; don't also finish a stroke.
+  if (isEyedropperActive()) return;
   const tool = getTool(activeTool);
   if (tool && tool.onPointerUp) tool.onPointerUp(app, event);
+});
+
+// A cancelled pointer means the gesture was invalidated (palm rejection, a
+// system gesture taking over), so the in-progress stroke is discarded rather
+// than committed. Every tool's onDeactivate drops its transient state.
+window.addEventListener("pointercancel", () => {
+  interaction.panning = false;
+  canvas.classList.remove("panning");
+  const tool = getTool(activeTool);
+  if (tool && tool.onDeactivate) tool.onDeactivate(app);
 });
 
 canvas.addEventListener(
@@ -452,6 +467,7 @@ function drawSliceBlade(ctx, sl) {
 function drawDebugOverlay() {
   const padding = 12;
   const lineH = 18;
+  const brush = brushCacheStats();
   const lines = [
     `panX:  ${view.panX.toFixed(1)}`,
     `panY:  ${view.panY.toFixed(1)}`,
@@ -459,6 +475,7 @@ function drawDebugOverlay() {
     `tool:  ${activeTool}`,
     `elems: ${scene.elements.length}`,
     `sel:   ${scene.selected.size}`,
+    `brush: ${brush.entries} / ${brush.megapixels} MP`,
   ];
   ctx.font = "13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
   ctx.textBaseline = "top";
@@ -487,5 +504,6 @@ resizeCanvas();
 syncPanelFromSettings();
 initStyleWheel(app);
 setActiveTool("line");
+installBrushTestbed(app);
 requestAnimationFrame(frameLoop);
 

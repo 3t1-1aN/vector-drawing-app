@@ -90,7 +90,6 @@ export const sliceTool = {
 
   onPointerDown(app, event) {
     if (event.button !== 0 || app.interaction.spaceDown) return;
-    event.preventDefault();
     state.active = true;
     state.startWorld = screenToWorld(event.clientX, event.clientY);
     state.endWorld = state.startWorld;

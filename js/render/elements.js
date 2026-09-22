@@ -1,12 +1,13 @@
 // render/elements.js
 // Stroke a single element + draw the whole scene (committed + live preview).
 // Must be called after the world view transform is applied so coordinates
-// are interpreted in world space. Each element is drawn with its selected
-// medium (pen / marker / pencil / chalk) via brush/mediums.js.
+// are interpreted in world space. Each element is rendered by the brush
+// engine using the preset named on element.style.medium.
 
-import { getRectCorners } from "../scene/element.js";
+import { getBounds, getRectCorners } from "../scene/element.js";
+import { getVisibleWorldBounds } from "../core/view.js";
 import { isDarkBackground } from "../workspace/appearance.js";
-import { strokeMedium } from "../brush/mediums.js";
+import { beginBrushFrame, drawBrushElement } from "../brush/cache.js";
 
 const SELECTED_COLOR = "rgba(255, 170, 40, 0.95)";
 
@@ -58,10 +59,16 @@ export function traceElement(ctx, el) {
 export function drawScene(ctx, scene, view, preview) {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+  beginBrushFrame();
 
-  // Committed elements — each rendered with its own medium.
+  // Off-screen strokes cost nothing to skip and would otherwise each take a
+  // rasterise slot on the way back into view.
+  const visible = getVisibleWorldBounds();
+
+  // Committed elements — each rendered with its own brush preset.
   for (const el of scene.elements) {
     const selected = scene.isSelected(el.id);
+    if (!selected && !onScreen(el, visible, view)) continue;
     if (selected) {
       // Selection highlight is a plain solid outline so handles stay readable
       // regardless of the element's medium texture.
@@ -73,7 +80,7 @@ export function drawScene(ctx, scene, view, preview) {
       traceElement(ctx, el);
       ctx.stroke();
     } else {
-      strokeMedium(ctx, el, view);
+      drawBrushElement(ctx, el, view);
     }
   }
   ctx.globalAlpha = 1;
@@ -92,8 +99,22 @@ export function drawScene(ctx, scene, view, preview) {
       ctx.stroke();
       ctx.globalAlpha = 1;
     } else {
-      strokeMedium(ctx, preview.element, view, { alphaScale: 0.85 });
+      // The in-flight stroke changes every frame, so it renders straight
+      // through rather than churning a cache entry per frame.
+      drawBrushElement(ctx, preview.element, view, { alphaScale: 0.9, cache: false });
     }
   }
+}
+
+/** Bounding-box overlap test, padded for the widest the brush can spread. */
+function onScreen(el, visible, view) {
+  const b = getBounds(el);
+  const pad = ((el.style?.strokeWidth || 2) * 3 + 8) / view.zoom;
+  return !(
+    b.maxX + pad < visible.left ||
+    b.minX - pad > visible.right ||
+    b.maxY + pad < visible.top ||
+    b.minY - pad > visible.bottom
+  );
 }
 

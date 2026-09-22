@@ -48,7 +48,6 @@ export const nudgeTool = {
 
   onPointerDown(app, event) {
     if (event.button !== 0 || app.interaction.spaceDown) return;
-    event.preventDefault();
     const scene = app.scene;
     const world = screenToWorld(event.clientX, event.clientY);
     const tol = PICK_TOLERANCE_PX / app.view.zoom;

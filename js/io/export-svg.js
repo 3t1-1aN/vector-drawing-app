@@ -5,7 +5,7 @@
 
 import { getRectCorners } from "../scene/element.js";
 import { scaleSettings, UNITS } from "../precision/scale.js";
-import { getMedium } from "../brush/mediums.js";
+import { getBrushPreset } from "../brush/presets.js";
 
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -15,24 +15,24 @@ function ptsToStr(points) {
   return points.map((p) => `${p.x.toFixed(3)} ${p.y.toFixed(3)}`).join(" ");
 }
 
-// SVG can't reproduce the canvas jitter texture, so each medium is
-// approximated with stroke-opacity / width / dasharray tweaks. pen is the
-// faithful baseline; marker is broad and translucent; pencil is thin and
-// faint with a fine broken dash; chalk is a coarser broken dash.
-function mediumSvgAttrs(el) {
-  const m = getMedium(el.style.medium || "pen");
+// SVG has no equivalent of a stamped, textured brush, so each preset exports
+// as a plain stroke using the same weight and translucency the wheel shows in
+// its previews. The export is a faithful outline, not a picture of the brush;
+// anything else would mean emitting thousands of filled polygons per stroke.
+function brushSvgAttrs(el) {
+  const sw = getBrushPreset(el.style.medium || "pen").swatch;
   const baseOpacity = el.style.opacity ?? 1;
-  const width = (el.style.strokeWidth || 2) * m.widthMul;
-  const opacity = baseOpacity * m.alphaMul;
+  const width = (el.style.strokeWidth || 2) * sw.widthMul;
+  const opacity = baseOpacity * sw.alphaMul;
   let attrs = `fill="none" stroke="${el.style.stroke || "#888"}" stroke-width="${width.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${opacity.toFixed(3)}"`;
-  if (m.dash) {
-    attrs += ` stroke-dasharray="${m.dash.map((d) => (d * width).toFixed(2)).join(" ")}"`;
+  if (sw.dash) {
+    attrs += ` stroke-dasharray="${sw.dash.map((d) => (d * width).toFixed(2)).join(" ")}"`;
   }
   return attrs;
 }
 
 function elementToSvg(el) {
-  const common = mediumSvgAttrs(el);
+  const common = brushSvgAttrs(el);
   switch (el.type) {
     case "line":
       return `  <line ${common} x1="${el.startX}" y1="${el.startY}" x2="${el.endX}" y2="${el.endY}" />`;

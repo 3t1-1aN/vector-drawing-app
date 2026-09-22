@@ -9,7 +9,7 @@ export const activeBrush = {
   stroke: "#2b2b30",
   strokeWidth: 2.0,
   opacity: 1.0,
-  medium: "pen",      // pen | marker | pencil | chalk
+  medium: "pen",      // brush preset id, see brush/presets.js
   toolType: "line",   // select | line | rect | circle | pen | nudge | slice
   smoothing: 0,       // 0..1, pen stroke smoothing
 };

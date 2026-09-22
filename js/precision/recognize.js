@@ -14,6 +14,10 @@ const RECOG_RIGHT_ANGLE_DEG = 22;
 const RECOG_SQUARE_ASPECT = 0.12;
 const RECOG_MIN_EDGE_PX = 18;
 const RECOG_MIN_TRIANGLE_AREA_PX = 600;
+// A vertex this close to flat is a leftover on a straight edge, not a corner.
+const RECOG_STRAIGHT_DEG = 22;
+// A ring this sharp was drawn as a polygon, so it must not become a circle.
+const RECOG_CORNER_MAX_DEG = 130;
 
 function strokeLength(points) {
   let len = 0;
@@ -133,30 +137,98 @@ function makeRectElement(corners) {
   };
 }
 
-function recognizePolygon(points, zoom) {
-  const tol = RECOG_RDP_TOL_PX / zoom;
-  const mergeDist = RECOG_CORNER_MERGE_PX / zoom;
-  let simp = simplifyRDP(points, tol);
-  simp = mergeCloseCorners(simp, mergeDist);
-  const n = simp.length;
-  const edges = edgeLengths(simp);
+/**
+ * Rotate a closed stroke to start at the point farthest from its centroid,
+ * and close the ring explicitly.
+ *
+ * RDP pins its first and last point, which on a closed stroke are the same
+ * place: every candidate then gets measured against a zero-length baseline,
+ * and which vertices survive comes down to where the hand happened to start.
+ * The farthest point from the centroid is always a real corner on a polygon,
+ * so anchoring there gives the recursion two honest endpoints to work from.
+ */
+function rotateToExtreme(points) {
+  let cx = 0, cy = 0;
+  for (const p of points) { cx += p.x; cy += p.y; }
+  cx /= points.length;
+  cy /= points.length;
+
+  let start = 0;
+  let far = -1;
+  for (let i = 0; i < points.length; i++) {
+    const d = (points[i].x - cx) ** 2 + (points[i].y - cy) ** 2;
+    if (d > far) { far = d; start = i; }
+  }
+
+  const out = [];
+  for (let i = 0; i < points.length; i++) {
+    out.push(points[(start + i) % points.length]);
+  }
+  out.push(out[0]);
+  return out;
+}
+
+/**
+ * Drop vertices that sit on a straight run.
+ *
+ * Even anchored well, RDP leaves the occasional extra point mid-edge once the
+ * stroke has any tremor in it. One of those is enough to make a square arrive
+ * here as a pentagon and miss the quad test entirely, so they get removed by
+ * flatness rather than by count. Removal is one-at-a-time because taking a
+ * vertex out changes the angle at both its neighbours.
+ */
+function dropCollinear(ring) {
+  const flat = Math.PI - (RECOG_STRAIGHT_DEG * Math.PI) / 180;
+  let out = ring;
+  for (let guard = ring.length; guard > 0 && out.length > 3; guard--) {
+    let worst = -1;
+    let worstAngle = flat;
+    for (let i = 0; i < out.length; i++) {
+      const a = interiorAngle(out, i);
+      if (a > worstAngle) { worstAngle = a; worst = i; }
+    }
+    if (worst === -1) break;
+    out = out.slice(0, worst).concat(out.slice(worst + 1));
+  }
+  return out;
+}
+
+/** The corner ring of a closed stroke: one vertex per genuine corner. */
+function cornerRing(points, zoom) {
+  let ring = simplifyRDP(rotateToExtreme(points), RECOG_RDP_TOL_PX / zoom);
+  ring = mergeCloseCorners(ring, RECOG_CORNER_MERGE_PX / zoom);
+  return dropCollinear(ring);
+}
+
+/** True when every vertex turns hard enough that the stroke reads as drawn corners. */
+function hasSharpCorners(ring) {
+  const limit = (RECOG_CORNER_MAX_DEG * Math.PI) / 180;
+  for (let i = 0; i < ring.length; i++) {
+    if (interiorAngle(ring, i) > limit) return false;
+  }
+  return true;
+}
+
+function recognizePolygon(ring, zoom) {
+  const n = ring.length;
+  const edges = edgeLengths(ring);
   const minEdge = RECOG_MIN_EDGE_PX / zoom;
   if (edges.some((e) => e < minEdge)) return null;
 
   if (n === 3) {
-    const area = Math.abs(polygonArea(simp));
+    const area = Math.abs(polygonArea(ring));
     const minArea = RECOG_MIN_TRIANGLE_AREA_PX / (zoom * zoom);
     if (area < minArea) return null;
-    return { type: "triangle", corners: simp.slice(), sides: edgeLengths(simp) };
+    return { type: "triangle", corners: ring.slice(), sides: edges.slice() };
   }
 
   if (n === 4) {
     const right = Math.PI / 2;
     for (let i = 0; i < 4; i++) {
-      const dev = Math.abs(interiorAngle(simp, i) - right);
+      const dev = Math.abs(interiorAngle(ring, i) - right);
       if (dev > (RECOG_RIGHT_ANGLE_DEG * Math.PI) / 180) return null;
     }
-    return makeRectElement(simp);
+    return makeRectElement(ring);
   }
 
   return null;
@@ -182,8 +254,15 @@ export function recognizeShape(points, zoom) {
     return { type: "line", startX: first.x, startY: first.y, endX: last.x, endY: last.y };
   }
 
-  const polygon = recognizePolygon(points, zoom);
+  const ring = cornerRing(points, zoom);
+  const polygon = recognizePolygon(ring, zoom);
   if (polygon) return polygon;
+
+  // The roundness test below is a weak one -- a perfect square's radii vary by
+  // about a tenth, well inside the threshold -- so it only gets to run on
+  // strokes that were not drawn as corners. Without this, every quadrilateral
+  // the rect test turns down (a rhombus, a lopsided box) comes back a circle.
+  if (ring.length >= 3 && ring.length <= 4 && hasSharpCorners(ring)) return null;
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of points) {

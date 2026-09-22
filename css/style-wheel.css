@@ -1,152 +1,491 @@
 /* ------------------------------------------------------------------
-   Style hub — floating Concepts-style wheel: outer tool ring, inner
-   property ring, center color disc. Replaces the top toolbar.
+   Style hub — the control console. One machined body rather than a
+   stack of panels: a raised outer shell carrying the tools, a recessed
+   inner surface with the property grooves cut into it, and a pocket in
+   the middle holding the color hub.
+
+   Two rules keep it coherent:
+   1. Light comes from the upper left. Raised edges catch it at the top
+      (swgRaisedRim), recessed edges catch it at the bottom
+      (swgRecessRim). Both gradients live in style-wheel.js buildDefs().
+   2. The working color is the only chroma. Everything structural stays
+      neutral charcoal; --sw-live carries a tamed version of whatever the
+      user is drawing with and is set from syncHub().
 ------------------------------------------------------------------ */
 #styleWheel {
+  /* Surfaces, outside in. Deeper is darker, and the steps between them are
+     deliberately small — the section should be felt before it is seen. */
+  --sw-body: rgba(30, 31, 36, 0.965);
+  --sw-well: rgba(11, 12, 15, 0.82);
+  --sw-socket: rgba(0, 0, 0, 0.42);
+  --sw-pad: #191a1f;
+  --sw-pad-hover: #232429;
+  --sw-pad-active: #33353d;
+
+  --sw-ink: #8d93a1;
+  --sw-ink-hover: #c9ced9;
+  --sw-ink-hi: #eceef3;
+  --sw-focus: rgba(255, 255, 255, 0.85);
+
+  /* Set from syncHub(): a readable tint of the current stroke color. */
+  --sw-live: #cfd4de;
+  --sw-live-line: rgba(207, 212, 222, 0.5);
+  --sw-live-wash: rgba(207, 212, 222, 0.1);
+
+  /* Short, flat easing. Controls settle; nothing overshoots. */
+  --sw-quick: 110ms;
+  --sw-ease-time: 150ms;
+  --sw-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
   position: fixed;
-  left: 20px;
+  left: 24px;
   top: 50%;
   transform: translateY(-50%);
-  width: 300px;
-  height: 300px;
+  width: 320px;
+  height: 320px;
   z-index: 12;
   user-select: none;
-  filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.45));
+  /* Contact shadow plus a shallow ambient one: the console rests on the
+     canvas instead of hovering over it. */
+  filter:
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4))
+    drop-shadow(0 9px 20px rgba(0, 0, 0, 0.36));
+  /* The wheel is round but its box is square: let the corners fall through to
+     the canvas, and opt the real surfaces back in. */
+  pointer-events: none;
 }
 
 #styleWheel svg {
   display: block;
   overflow: visible;
+  pointer-events: auto;
 }
 
-/* Tool ring band — frosted dark glass, also the reposition drag surface */
+/* --- Body ---------------------------------------------------------- */
+/* Flat fills carry the tone; the gradient overlays carry the light. The two
+   fills are also what shields the canvas from clicks aimed at the wheel. */
+
+#styleWheel .sw-body { fill: var(--sw-body); }
+#styleWheel .sw-well { fill: var(--sw-well); }
+#styleWheel .sw-socket { fill: var(--sw-socket); }
+
+#styleWheel .sw-body-shade,
+#styleWheel .sw-well-shade,
+#styleWheel .sw-socket-shade {
+  pointer-events: none;
+}
+
+/* Grain: just enough to stop the charcoal reading as flat vector fill. */
+#styleWheel .sw-grain {
+  opacity: 0.07;
+  pointer-events: none;
+}
+
+/* Edges. Stroke color comes from the shared rim gradients set in JS. */
+#styleWheel .sw-body-rim,
+#styleWheel .sw-well-rim,
+#styleWheel .sw-socket-rim {
+  fill: none;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* Thin chamfer inboard of the outer rim, so the shell has visible thickness. */
+#styleWheel .sw-body-bevel {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.022);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* Tool band: no paint of its own, just the reposition drag surface. */
 #styleWheel .sw-band {
-  stroke: rgba(28, 28, 33, 0.92);
+  stroke: transparent;
+  fill: none;
+  pointer-events: all;
   cursor: grab;
 }
 
 #styleWheel .sw-band:active { cursor: grabbing; }
+#styleWheel.dragging .sw-band { cursor: grabbing; }
 
-/* Tool slots on the outer ring */
-#styleWheel .sw-tool-dot {
-  fill: rgba(38, 38, 44, 0.94);
-  stroke: rgba(255, 255, 255, 0.13);
-  stroke-width: 1;
-  transition: fill 0.15s ease, stroke 0.15s ease, r 0.15s ease;
+/* --- Tool pads ------------------------------------------------------ */
+/* Inactive pads sit flush in a shallow pocket. Selecting one lifts it: the
+   rim gradient flips, the face lightens, and a hairline of the working color
+   rings it. No fill color change beyond the neutral step up. */
+
+#styleWheel .sw-pad-base {
+  fill: var(--sw-pad);
+  transition: fill var(--sw-ease-time) var(--sw-ease);
 }
 
-#styleWheel .sw-tool:hover .sw-tool-dot {
-  fill: rgba(64, 64, 74, 1);
-  stroke: rgba(255, 255, 255, 0.32);
-}
-
-#styleWheel .sw-tool.active .sw-tool-dot {
-  fill: rgba(90, 160, 255, 0.30);
-  stroke: rgba(140, 190, 255, 0.7);
-}
-
-#styleWheel .sw-tool.active:hover .sw-tool-dot {
-  fill: rgba(90, 160, 255, 0.42);
-}
-
-#styleWheel .sw-tool-label {
-  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  fill: #cfd2dd;
-  pointer-events: none;
-  transition: fill 0.15s ease;
-}
-
-#styleWheel .sw-tool:hover .sw-tool-label { fill: #ffffff; }
-#styleWheel .sw-tool.active .sw-tool-label { fill: #cfe2ff; }
-
-/* Undo / redo on the ring axis */
-#styleWheel .sw-ringbtn-dot {
-  fill: rgba(38, 38, 44, 0.9);
-  stroke: rgba(255, 255, 255, 0.12);
-  stroke-width: 1;
-}
-
-#styleWheel .sw-ringbtn:hover .sw-ringbtn-dot { fill: rgba(52, 52, 60, 0.98); }
-#styleWheel .sw-ringbtn-label {
-  font: 600 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  fill: #b9bdc9;
+#styleWheel .sw-pad-face {
+  fill: url(#swgPadIn);
   pointer-events: none;
 }
 
-/* Property ring tracks (size / opacity / smoothing) */
-#styleWheel .sw-track {
+#styleWheel .sw-pad-rim {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.14);
-  stroke-width: 5;
+  stroke: url(#swgPadRimIn);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* Only painted for the active slot. */
+#styleWheel .sw-pad-sel {
+  fill: none;
+  stroke: var(--sw-live-line);
+  stroke-width: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--sw-ease-time) var(--sw-ease);
+}
+
+/* Tactile response: the pad itself moves, not a glow around it. */
+#styleWheel .sw-pad {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform var(--sw-quick) var(--sw-ease);
+}
+
+#styleWheel .sw-tool:hover .sw-pad,
+#styleWheel .sw-ringbtn:hover .sw-pad { transform: scale(1.035); }
+
+#styleWheel .sw-tool:active .sw-pad,
+#styleWheel .sw-ringbtn:active .sw-pad { transform: scale(0.965); }
+
+#styleWheel .sw-tool:hover .sw-pad-base,
+#styleWheel .sw-ringbtn:hover .sw-pad-base { fill: var(--sw-pad-hover); }
+
+#styleWheel .sw-tool.active .sw-pad-base { fill: var(--sw-pad-active); }
+#styleWheel .sw-tool.active .sw-pad-face { fill: url(#swgPadUp); }
+#styleWheel .sw-tool.active .sw-pad-rim { stroke: url(#swgPadRimUp); }
+#styleWheel .sw-tool.active .sw-pad-sel { opacity: 1; }
+
+/* Outward index mark on the selected slot. */
+#styleWheel .sw-tool-tick {
+  stroke: var(--sw-live);
+  stroke-width: 1.6;
   stroke-linecap: round;
-  cursor: pointer;
-  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--sw-ease-time) var(--sw-ease);
 }
 
-#styleWheel .sw-track:hover {
-  stroke: rgba(255, 255, 255, 0.32);
-  stroke-width: 6.5;
-}
+#styleWheel .sw-tool.active .sw-tool-tick { opacity: 0.9; }
 
-#styleWheel .sw-handle {
-  fill: #e8e8ee;
-  stroke: rgba(0, 0, 0, 0.45);
+/* --- Icons -------------------------------------------------------- */
+/* Placeholder inline line art. Swapping in finished artwork happens in
+   renderIcon(); these rules only set the monochrome ink treatment. */
+#styleWheel .sw-icon { pointer-events: none; }
+
+#styleWheel .sw-icon-line {
+  fill: none;
+  stroke: var(--sw-ink);
   stroke-width: 1.5;
-  cursor: pointer;
-  pointer-events: all;
-  transition: r 0.15s ease, fill 0.15s ease;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke var(--sw-ease-time) var(--sw-ease);
 }
 
-#styleWheel .sw-handle:hover { fill: #ffffff; r: 9.5; }
+#styleWheel .sw-icon-solid {
+  fill: var(--sw-ink);
+  stroke: none;
+  transition: fill var(--sw-ease-time) var(--sw-ease);
+}
+
+#styleWheel .sw-tool:hover .sw-icon-line,
+#styleWheel .sw-ringbtn:hover .sw-icon-line { stroke: var(--sw-ink-hover); }
+#styleWheel .sw-tool:hover .sw-icon-solid,
+#styleWheel .sw-ringbtn:hover .sw-icon-solid { fill: var(--sw-ink-hover); }
+
+#styleWheel .sw-tool.active .sw-icon-line { stroke: var(--sw-ink-hi); }
+#styleWheel .sw-tool.active .sw-icon-solid { fill: var(--sw-ink-hi); }
+
+/* Property glyphs are a legend, not a control: quieter than the tool ink. */
+#styleWheel .sw-prop .sw-icon-line { stroke: rgba(255, 255, 255, 0.24); }
+#styleWheel .sw-prop .sw-icon-solid { fill: rgba(255, 255, 255, 0.24); }
+#styleWheel .sw-prop:hover .sw-icon-line { stroke: rgba(255, 255, 255, 0.45); }
+#styleWheel .sw-prop:hover .sw-icon-solid { fill: rgba(255, 255, 255, 0.45); }
+
+/* --- Property grooves (size / opacity / smoothing) ----------------- */
+/* A channel cut into the well: dark floor, shadowed inner wall, lit outer
+   lip. The value line runs along the floor; the knob rides in it. */
+
+/* Invisible wide band gives the thin groove a comfortable hit area. */
+#styleWheel .sw-track-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 22;
+  stroke-linecap: butt;
+}
+
+#styleWheel .sw-groove,
+#styleWheel .sw-groove-lip,
+#styleWheel .sw-groove-wall,
+#styleWheel .sw-track,
+#styleWheel .sw-fill,
+#styleWheel .sw-prop-tick {
+  fill: none;
+  pointer-events: none;
+}
+
+#styleWheel .sw-groove {
+  stroke: rgba(0, 0, 0, 0.42);
+  stroke-width: 7.5;
+  stroke-linecap: round;
+}
+
+#styleWheel .sw-groove-lip {
+  stroke: rgba(255, 255, 255, 0.042);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+#styleWheel .sw-groove-wall {
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+/* Untravelled: a thin, low-contrast line. Travelled: the same line, lifted
+   far enough that the value reads across the wheel without the label. */
+#styleWheel .sw-track {
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke var(--sw-ease-time) var(--sw-ease);
+}
+
+#styleWheel .sw-fill {
+  stroke: rgba(226, 232, 241, 0.62);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke var(--sw-ease-time) var(--sw-ease);
+}
+
+#styleWheel .sw-prop:hover .sw-track { stroke: rgba(255, 255, 255, 0.12); }
+#styleWheel .sw-prop:hover .sw-fill { stroke: rgba(240, 244, 250, 0.85); }
+
+/* Preset detents notched across the groove floor. */
+#styleWheel .sw-prop-tick {
+  stroke: rgba(0, 0, 0, 0.5);
+  stroke-width: 1;
+}
+
+/* --- Knob ----------------------------------------------------------- */
+/* Positioned by a translate on .sw-knob from syncUi(); the inner body owns
+   its own scale so hover and drag never fight that transform. */
+
+#styleWheel .sw-knob-cast { pointer-events: none; }
+
+#styleWheel .sw-knob-body {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform var(--sw-quick) var(--sw-ease);
+}
+
+#styleWheel .sw-knob-edge {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* The catch-light that says "this one moves". */
+#styleWheel .sw-knob-gloss {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+#styleWheel .sw-knob-dimple {
+  fill: rgba(26, 28, 33, 0.42);
+  pointer-events: none;
+}
+
+#styleWheel .sw-prop:hover .sw-knob-body { transform: scale(1.09); }
+#styleWheel.dragging .sw-knob-body { transform: scale(1.12); }
+#styleWheel .sw-knob:active { cursor: grabbing; }
+
+/* --- Readouts ------------------------------------------------------- */
+/* Instrument values, not headings: small, tabular, and dimmer on the unit. */
 
 #styleWheel .sw-readout {
-  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  fill: rgba(255, 255, 255, 0.75);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  font: 500 9.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
   cursor: pointer;
-  pointer-events: all;
-  transition: fill 0.15s ease;
+  transition: fill var(--sw-ease-time) var(--sw-ease);
 }
 
-#styleWheel .sw-readout:hover { fill: #ffffff; }
+#styleWheel .sw-read-value { fill: rgba(255, 255, 255, 0.62); }
+#styleWheel .sw-read-unit { fill: rgba(255, 255, 255, 0.3); }
 
-/* Center color disc */
+#styleWheel .sw-prop:hover .sw-read-value { fill: rgba(255, 255, 255, 0.92); }
+#styleWheel .sw-prop:hover .sw-read-unit { fill: rgba(255, 255, 255, 0.5); }
+
+/* --- Keyboard focus ------------------------------------------------ */
+#styleWheel .sw-tool:focus,
+#styleWheel .sw-ringbtn:focus,
+#styleWheel .sw-prop:focus { outline: none; }
+
+#styleWheel .sw-tool:focus-visible .sw-pad-rim,
+#styleWheel .sw-ringbtn:focus-visible .sw-pad-rim {
+  stroke: var(--sw-focus);
+  stroke-width: 1.5;
+}
+
+#styleWheel .sw-prop:focus-visible .sw-track { stroke: rgba(255, 255, 255, 0.4); }
+#styleWheel .sw-prop:focus-visible .sw-knob-edge {
+  stroke: var(--sw-focus);
+  stroke-width: 2;
+}
+
+/* While the color picker is open it owns the ring space. The tool and
+   property layers don't just disappear — they push outward as they fade, so
+   the picker's rings read as having expanded out of this console. The body
+   stays put underneath as the shared material between the two states. */
+#styleWheel .sw-propring,
+#styleWheel .sw-tool,
+#styleWheel .sw-ringbtn {
+  transform-origin: center;
+  transition: opacity 190ms var(--sw-ease), transform 210ms var(--sw-ease);
+}
+
+#styleWheel.color-open .sw-propring,
+#styleWheel.color-open .sw-tool,
+#styleWheel.color-open .sw-ringbtn {
+  opacity: 0;
+  transform: scale(1.08);
+  pointer-events: none;
+}
+
+/* --- Center color hub --------------------------------------------- */
+/* Sits down inside the socket drawn behind it: a dark contact line, a hint
+   of the pocket's shadow across its top edge, and the pocket's lit shoulder
+   showing beneath. No bright ring — that would make it float again. */
 #wheelColor {
   appearance: none;
+  pointer-events: auto;
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 124px;
-  height: 124px;
   border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.28);
-  cursor: pointer;
+  border: none;
   padding: 0;
-  transition: border-color 0.15s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    inset 0 2px 5px rgba(0, 0, 0, 0.42),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.1);
+  transition: box-shadow var(--sw-ease-time) var(--sw-ease);
 }
 
 #wheelColor:hover {
-  border-color: rgba(255, 255, 255, 0.45);
-  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.28), 0 0 0 6px rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    0 0 0 2px rgba(255, 255, 255, 0.11),
+    inset 0 2px 5px rgba(0, 0, 0, 0.36),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.14);
 }
 
-/* Hover tooltip for tool slots */
+#wheelColor:active {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.75),
+    inset 0 3px 7px rgba(0, 0, 0, 0.5);
+}
+
+#wheelColor:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    0 0 0 2px var(--sw-focus),
+    inset 0 2px 5px rgba(0, 0, 0, 0.42);
+}
+
+/* Checker plate under the color so opacity reads visually. */
+.wheel-hub-checker {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(45deg, #34343b 25%, transparent 25%, transparent 75%, #34343b 75%),
+    linear-gradient(45deg, #34343b 25%, #232329 25%, #232329 75%, #34343b 75%);
+  background-size: 11px 11px;
+  background-position: 0 0, 5.5px 5.5px;
+}
+
+.wheel-hub-fill {
+  position: absolute;
+  inset: 0;
+}
+
+/* Live stroke sample: weight, dash and translucency all follow the medium,
+   so this is literally what the next stroke will look like. */
+.wheel-hub-sample {
+  position: relative;
+  width: 68px;
+  height: 28px;
+  margin-bottom: 3px;
+  overflow: visible;
+}
+
+.wheel-hub-sample-path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.94);
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.45));
+}
+
+.wheel-hub-hex {
+  position: relative;
+  font: 500 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.62);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  transition: color var(--sw-ease-time) var(--sw-ease);
+}
+
+#wheelColor:hover .wheel-hub-hex { color: rgba(255, 255, 255, 0.86); }
+
+/* Flip the sample + hex to dark ink over light colors. */
+#wheelColor.on-light .wheel-hub-sample-path {
+  stroke: rgba(12, 12, 16, 0.88);
+  filter: none;
+}
+
+#wheelColor.on-light .wheel-hub-hex {
+  color: rgba(12, 12, 16, 0.6);
+  text-shadow: none;
+}
+
+#wheelColor.on-light:hover .wheel-hub-hex { color: rgba(12, 12, 16, 0.85); }
+
+/* --- Hover tooltip ------------------------------------------------- */
 #wheelTooltip {
   position: fixed;
   z-index: 30;
-  padding: 5px 9px;
-  background: rgba(20, 20, 24, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  color: #e6e6ea;
-  font: 500 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 4px 8px;
+  background: rgba(16, 17, 20, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 5px;
+  color: #d3d6dd;
+  font: 500 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0.01em;
   white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   pointer-events: none;
   opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateY(3px);
+  transition: opacity var(--sw-quick, 110ms) ease, transform var(--sw-quick, 110ms) ease;
 }
 
 #wheelTooltip.visible {
@@ -155,52 +494,98 @@
 }
 
 /* ------------------------------------------------------------------
-   Hub popovers — medium picker + property preset sliders
+   Hub popovers — medium picker + property preset sliders.
+   Same material as the console so they read as part of the instrument.
 ------------------------------------------------------------------ */
 #wheelPopover {
   position: fixed;
   z-index: 16;
-  padding: 8px;
-  background: rgba(24, 24, 28, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  padding: 10px;
+  background: rgba(20, 21, 25, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 10px 24px rgba(0, 0, 0, 0.44);
   user-select: none;
-  transform: translateY(-50%) translateX(-6px);
   opacity: 0;
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  transform: translateX(-5px);
+  transition: opacity 150ms cubic-bezier(0.22, 0.61, 0.36, 1),
+              transform 150ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 #wheelPopover.visible {
   opacity: 1;
-  transform: translateY(-50%) translateX(0);
+  transform: translateX(0);
+}
+
+.wheel-popover-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font: 600 9px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #767b88;
+  margin-bottom: 9px;
+}
+
+.wheel-popover-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  color: #c3c8d2;
+  text-transform: none;
 }
 
 /* Medium list */
-#wheelPopover.wheel-popover-media { display: flex; flex-direction: column; gap: 2px; }
+#wheelPopover.wheel-popover-media { display: flex; flex-direction: column; gap: 2px; width: 168px; }
 
 #wheelPopover.wheel-popover-media button {
   appearance: none;
-  border: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
   background: transparent;
-  color: #c9c9d2;
+  color: #a8adb9;
   font: 500 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  padding: 7px 12px;
+  padding: 6px 8px;
   border-radius: 6px;
   cursor: pointer;
   text-align: left;
+  transition: background 110ms cubic-bezier(0.22, 0.61, 0.36, 1),
+              color 110ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-#wheelPopover.wheel-popover-media button:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
-#wheelPopover.wheel-popover-media button.active { background: rgba(90, 160, 255, 0.22); color: #9cc8ff; }
+#wheelPopover.wheel-popover-media button:hover {
+  background: rgba(255, 255, 255, 0.045);
+  color: #e3e6ec;
+}
+
+#wheelPopover.wheel-popover-media button.active {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: #eceef3;
+}
+
+.wheel-medium-sample {
+  width: 56px;
+  height: 18px;
+  flex: none;
+  overflow: visible;
+}
 
 /* Property slider + presets */
-#wheelPopover.wheel-popover-slider { display: flex; flex-direction: column; gap: 8px; width: 200px; }
+#wheelPopover.wheel-popover-slider { width: 204px; }
 
 #wheelPopover.wheel-popover-slider input[type="range"] {
   width: 100%;
-  accent-color: #5aa0ff;
+  margin: 0 0 10px;
+  accent-color: #c3c8d2;
+  cursor: pointer;
 }
 
 .wheel-preset-row { display: flex; gap: 4px; }
@@ -208,30 +593,51 @@
 .wheel-preset-row button {
   appearance: none;
   flex: 1;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
-  color: #cfcfd6;
-  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  color: #a8adb9;
+  font: 500 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
   padding: 6px 0;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
+  transition: background 110ms cubic-bezier(0.22, 0.61, 0.36, 1),
+              color 110ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.wheel-preset-row button:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.wheel-preset-row button:hover { background: rgba(255, 255, 255, 0.08); color: #e3e6ec; }
+
+.wheel-preset-row button.active {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  color: #eceef3;
+}
 
 /* ------------------------------------------------------------------
-   Color wheel overlay — Concepts-style concentric rings around the hub
+   Color picker — the console opening up, not a panel over it.
+
+   The plate is the wheel's body carried outward past its own rim, the
+   swatch ring is recessed into that plate, and the mode pads sit in a
+   channel milled around the hub. Same surfaces, same light, same pad
+   construction as the wheel; only the swatches carry color.
 ------------------------------------------------------------------ */
 #colorWheelOverlay {
+  --cp-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
   position: fixed;
   width: 460px;
   height: 460px;
   z-index: 15;
   user-select: none;
   pointer-events: none;
+  filter:
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4))
+    drop-shadow(0 9px 20px rgba(0, 0, 0, 0.36));
   opacity: 0;
-  transform: scale(0.92);
-  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+  /* Collapsed onto the hub, so opening reads as the console growing. */
+  transform: scale(0.88);
+  transition: opacity 200ms var(--cp-ease), transform 210ms var(--cp-ease);
 }
 
 #colorWheelOverlay.open {
@@ -247,71 +653,171 @@
   pointer-events: none;
 }
 
+/* The rings push outward on top of the root's growth, and settle inside
+   out: controls first, then the color ring. */
+#colorWheelOverlay .cp-icon-ring,
+#colorWheelOverlay .cp-modes,
+#colorWheelOverlay .cp-plate-layer {
+  transform-origin: center;
+  transition: opacity 180ms var(--cp-ease), transform 210ms var(--cp-ease);
+}
+
+#colorWheelOverlay .cp-icon-ring { opacity: 0; transform: scale(0.94); }
+#colorWheelOverlay .cp-plate-layer { opacity: 0; transform: scale(0.9); }
+#colorWheelOverlay .cp-modes {
+  opacity: 0;
+  transform: scale(0.9);
+  transition-delay: 35ms;
+}
+
+#colorWheelOverlay.open .cp-icon-ring,
+#colorWheelOverlay.open .cp-modes,
+#colorWheelOverlay.open .cp-plate-layer {
+  opacity: 1;
+  transform: scale(1);
+}
+
 #colorWheelOverlay .cp-hit {
   fill: transparent;
   pointer-events: all;
 }
 
-/* Invisible but clickable surfaces inside the SVG */
+/* The svg is inert by default, so every interactive surface has to opt back
+   in. Miss one and the plate — which is deliberately hit-testable so a near
+   miss on a control does nothing — swallows the click instead. */
 #colorWheelOverlay .cp-track,
 #colorWheelOverlay .cp-mode-btn,
-#colorWheelOverlay .cp-chip,
+#colorWheelOverlay .cp-tile,
 #colorWheelOverlay .cp-value {
   pointer-events: all;
 }
 
-/* Mode icon ring */
-.cp-icon-track {
+/* Nothing is clickable while the picker is growing or folding away. */
+#colorWheelOverlay:not(.open) .cp-hit,
+#colorWheelOverlay:not(.open) .cp-plate,
+#colorWheelOverlay:not(.open) .cp-track,
+#colorWheelOverlay:not(.open) .cp-mode-btn,
+#colorWheelOverlay:not(.open) .cp-tile,
+#colorWheelOverlay:not(.open) .cp-value {
+  pointer-events: none;
+}
+
+/* --- Plate: the wheel body, extended -------------------------------- */
+#colorWheelOverlay .cp-plate {
+  stroke: rgba(30, 31, 36, 0.965);
+  pointer-events: all;
+}
+
+#colorWheelOverlay .cp-plate-shade,
+#colorWheelOverlay .cp-palette-rim,
+#colorWheelOverlay .cp-plate-rim,
+#colorWheelOverlay .cp-plate-bevel,
+#colorWheelOverlay .cp-ctrl-rim,
+#colorWheelOverlay .cp-grain {
+  pointer-events: none;
+}
+
+#colorWheelOverlay .cp-grain { opacity: 0.07; }
+
+#colorWheelOverlay .cp-plate-rim,
+#colorWheelOverlay .cp-palette-rim,
+#colorWheelOverlay .cp-ctrl-rim {
   fill: none;
-  stroke: rgba(28, 28, 33, 0.72);
-  stroke-width: 34;
-}
-
-.cp-mode-dot {
-  fill: rgba(38, 38, 44, 0.94);
-  stroke: rgba(255, 255, 255, 0.14);
   stroke-width: 1;
-  transition: fill 0.15s ease, stroke 0.15s ease;
 }
 
-.cp-mode-btn:hover .cp-mode-dot {
-  fill: rgba(58, 58, 68, 1);
-  stroke: rgba(255, 255, 255, 0.35);
+#colorWheelOverlay .cp-plate-bevel {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.022);
+  stroke-width: 1;
 }
 
-.cp-mode-btn.active .cp-mode-dot {
-  fill: rgba(90, 160, 255, 0.30);
-  stroke: rgba(140, 190, 255, 0.65);
+/* --- Inner control channel ------------------------------------------ */
+.cp-ctrl-channel {
+  stroke: rgba(11, 12, 15, 0.82);
+  pointer-events: none;
+}
+
+.cp-pad-base {
+  fill: #191a1f;
+  transition: fill 150ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.cp-pad-face {
+  fill: url(#cpgPadIn);
+  pointer-events: none;
+}
+
+.cp-pad-rim {
+  fill: none;
+  stroke: url(#cpgPadRimIn);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.cp-pad {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 110ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.cp-mode-btn:hover .cp-pad { transform: scale(1.04); }
+.cp-mode-btn:active .cp-pad { transform: scale(0.96); }
+.cp-mode-btn:hover .cp-pad-base { fill: #232429; }
+
+/* Selected mode lifts out of the channel; no color, just a step up. */
+.cp-mode-btn.active .cp-pad-base { fill: #33353d; }
+.cp-mode-btn.active .cp-pad-face { fill: url(#cpgPadUp); }
+.cp-mode-btn.active .cp-pad-rim { stroke: url(#cpgPadRimUp); }
+
+.cp-mode-btn:focus { outline: none; }
+.cp-mode-btn:focus-visible .cp-pad-rim {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1.5;
 }
 
 .cp-mode-label {
-  font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  fill: #cfd2dd;
+  font: 500 8.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.06em;
+  fill: #8d93a1;
   pointer-events: none;
-  transition: fill 0.15s ease;
+  transition: fill 150ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.cp-mode-btn:hover .cp-mode-label { fill: #ffffff; }
-.cp-mode-btn.active .cp-mode-label { fill: #cfe2ff; }
+.cp-mode-btn:hover .cp-mode-label { fill: #c9ced9; }
+.cp-mode-btn.active .cp-mode-label { fill: #eceef3; }
 
-/* Slider handles */
+/* Mode glyphs drawn as paths (eyedropper / markers) */
+.cp-mode-icon {
+  fill: none;
+  stroke: #8d93a1;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  transition: stroke 150ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.cp-mode-btn:hover .cp-mode-icon { stroke: #c9ced9; }
+.cp-mode-btn.active .cp-mode-icon { stroke: #eceef3; }
+
+/* Slider handles — the same knob language as the property grooves. */
 .cp-handle {
-  stroke: rgba(255, 255, 255, 0.9);
-  stroke-width: 2;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+  stroke: rgba(255, 255, 255, 0.88);
+  stroke-width: 1.75;
+  filter: drop-shadow(0 1px 2.5px rgba(0, 0, 0, 0.55));
   pointer-events: none;
 }
 
 /* Value labels on arcs */
 .cp-value {
-  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  fill: rgba(255, 255, 255, 0.82);
+  font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  fill: rgba(255, 255, 255, 0.68);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
   cursor: text;
 }
-
-.cp-value-top { x: 230px; y: 34px; }
-.cp-value-bottom { x: 230px; y: 432px; }
 
 /* Inline numeric editor */
 .cp-inline-edit {
@@ -319,31 +825,61 @@
   z-index: 40;
   width: 52px;
   height: 24px;
-  background: rgba(20, 20, 24, 0.96);
-  border: 1px solid rgba(120, 200, 255, 0.6);
-  border-radius: 6px;
-  color: #e6e6e6;
-  font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(18, 19, 23, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
+  color: #eceef3;
+  font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   text-align: center;
   padding: 0 4px;
 }
 
 .cp-inline-edit:focus { outline: none; }
 
-/* Marker wheel chips */
-.cp-chip {
-  stroke: rgba(0, 0, 0, 0.4);
+/* --- Swatch ring ----------------------------------------------------- */
+/* No stroke: the divider is the gap between tiles, so it reads as a kerf
+   in the material rather than an outline drawn around each color. */
+.cp-tile {
+  stroke: transparent;
   stroke-width: 1;
-  transition: r 0.12s ease, stroke 0.12s ease;
+  transition: stroke 110ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.cp-chip:hover {
-  stroke: rgba(255, 255, 255, 0.9);
-  stroke-width: 2;
-  r: 12;
+/* Hover lights the swatch edge rather than dimming its face — a hovered
+   control should read as catching the light, not as changing colour. Only
+   ever one at a time, so it never competes with the kerf. */
+.cp-tile:hover { stroke: rgba(255, 255, 255, 0.62); }
+
+/* Shading passes over the whole ring. Both are a few percent at most —
+   anything stronger would tint the swatches and misreport the color. */
+.cp-palette-edge {
+  fill: url(#cpgPaletteEdge);
+  pointer-events: none;
 }
 
-.cp-marker-spin { will-change: transform; }
+.cp-palette-wash {
+  fill: url(#cpgPaletteWash);
+  pointer-events: none;
+}
+
+/* Selection: a dark seat with a thin light edge, lifted by a tight
+   shadow. Reads as the chosen chip standing slightly proud of the ring. */
+.cp-selection {
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.6));
+}
+
+.cp-selection-seat {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.5);
+  stroke-width: 2.7;
+}
+
+.cp-selection-edge {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.94);
+  stroke-width: 1.3;
+}
 
 /* Eyedropper loupe */
 .cp-loupe {
@@ -392,4 +928,30 @@
 body.cp-eyedropping,
 body.cp-eyedropping #stage {
   cursor: crosshair !important;
+}
+
+/* ------------------------------------------------------------------
+   Reduced motion — keep state changes instant, drop the easing
+------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  #styleWheel *,
+  #wheelTooltip,
+  #wheelPopover,
+  #colorWheelOverlay,
+  #colorWheelOverlay * {
+    transition-duration: 0.01ms !important;
+  }
+
+  #colorWheelOverlay,
+  #colorWheelOverlay.open,
+  #colorWheelOverlay .cp-icon-ring,
+  #colorWheelOverlay .cp-modes,
+  #colorWheelOverlay .cp-plate-layer,
+  #styleWheel.color-open .sw-propring,
+  #styleWheel.color-open .sw-tool,
+  #styleWheel.color-open .sw-ringbtn {
+    transform: none;
+  }
+
+  #colorWheelOverlay .cp-modes { transition-delay: 0ms; }
 }

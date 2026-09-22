@@ -5,13 +5,15 @@
 // history. Pen additionally arms a 700ms hold timer that runs the
 // recognizer mid-stroke.
 
-import { screenToWorld, worldToScreen } from "../core/view.js";
+import { screenToWorld } from "../core/view.js";
 import { createIdElement, isDegenerate } from "../scene/element.js";
 import { AddElementCommand } from "../scene/scene.js";
 import { recognizeShape } from "../precision/recognize.js";
 import { activeBrush } from "../brush/active-brush.js";
+import { getBrushPreset } from "../brush/presets.js";
+import { PressureTracker } from "../brush/physics.js";
+import { samplesFrom } from "../brush/input.js";
 
-const PEN_SAMPLE_DIST_PX = 2;
 const HOLD_MOVE_THRESHOLD_PX = 5;
 const HOLD_TRIGGER_MS = 700;
 
@@ -24,7 +26,7 @@ function makeState() {
     holdTimerId: null,
     holdAnchorX: 0,
     holdAnchorY: 0,
-    smooth: null, // EMA cursor while a pen stroke is in flight
+    tracker: null, // PressureTracker while a freehand stroke is in flight
   };
 }
 
@@ -59,40 +61,25 @@ function startCircle(app, event) {
   shared.element = createIdElement("circle", { cx: c.x, cy: c.y, r: 0 });
 }
 
+/**
+ * Store a point in world space, keeping the pressure and speed the tracker
+ * measured in screen space. Those two numbers are what let the brush engine
+ * reproduce the stroke's dynamics later without persisting timestamps.
+ */
+function storePoint(el, s) {
+  const w = screenToWorld(s.x, s.y);
+  el.points.push({ x: w.x, y: w.y, p: s.p, v: s.v });
+}
+
 function startPen(app, event) {
-  const raw = screenToWorld(event.clientX, event.clientY);
-  shared.element = createIdElement("path", { points: [{ x: raw.x, y: raw.y }] });
-  shared.smooth = { x: raw.x, y: raw.y }; // EMA cursor for smoothing
+  shared.tracker = new PressureTracker(
+    getBrushPreset(activeBrush.medium),
+    activeBrush.smoothing,
+  );
+  shared.element = createIdElement("path", { points: [] });
+  const samples = samplesFrom(event);
+  storePoint(shared.element, shared.tracker.begin(samples[samples.length - 1]));
   armHoldTimer(app, event.clientX, event.clientY);
-}
-
-// Exponential moving average toward the raw pointer. smoothing 0 = raw input,
-// approaching 1 = heavy lag that irons out hand jitter.
-function smoothPoint(raw, amount) {
-  if (amount <= 0) return raw;
-  const k = 1 - Math.min(0.92, amount * 0.92); // keep a floor so it stays responsive
-  shared.smooth.x += (raw.x - shared.smooth.x) * k;
-  shared.smooth.y += (raw.y - shared.smooth.y) * k;
-  return { x: shared.smooth.x, y: shared.smooth.y };
-}
-
-// Chaikin corner-cutting, run once on commit for a clean final curve at
-// higher smoothing values. Iterations scale with the smoothing amount.
-function chaikin(points, iterations) {
-  let pts = points;
-  for (let it = 0; it < iterations; it++) {
-    if (pts.length < 3) break;
-    const out = [pts[0]];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i];
-      const b = pts[i + 1];
-      out.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 });
-      out.push({ x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
-    }
-    out.push(pts[pts.length - 1]);
-    pts = out;
-  }
-  return pts;
 }
 
 function armHoldTimer(app, sx, sy) {
@@ -121,18 +108,15 @@ function commit(app) {
   clearHold();
   const el = shared.element;
   if (el && !isDegenerate(el)) {
-    // Final pass of Chaikin corner-cutting for smoothed freehand strokes,
-    // so the committed path is clean rather than the raw EMA trace.
-    if (el.type === "path" && !shared.recognized && activeBrush.smoothing > 0.05) {
-      const iterations = 1 + Math.round(activeBrush.smoothing * 2);
-      el.points = chaikin(el.points, iterations);
-    }
+    // No post-smoothing pass here any more: the engine interpolates the
+    // stored points through a spline at render time, so an extra corner-cut
+    // would only round away detail the tracker already filtered.
     app.scene.add(el);
     app.history.push(new AddElementCommand(el));
     app.scene.clearSelection();
   }
   shared.element = null;
-  shared.smooth = null;
+  shared.tracker = null;
   shared.recognized = false;
 }
 
@@ -142,7 +126,6 @@ function makeShapeTool(kind) {
     onDeactivate() { clearHold(); shared.element = null; shared.recognized = false; },
     onPointerDown(app, event) {
       if (event.button !== 0 || app.interaction.spaceDown) return;
-      event.preventDefault();
       shared.recognized = false;
       start(app, event);
     },
@@ -179,7 +162,6 @@ export const penTool = {
   onDeactivate() { clearHold(); shared.element = null; shared.recognized = false; },
   onPointerDown(app, event) {
     if (event.button !== 0 || app.interaction.spaceDown) return;
-    event.preventDefault();
     shared.recognized = false;
     startPen(app, event);
   },
@@ -187,12 +169,13 @@ export const penTool = {
     const el = shared.element;
     if (!el) return;
     if (el.type === "path") {
-      const raw = screenToWorld(event.clientX, event.clientY);
-      const pt = smoothPoint(raw, activeBrush.smoothing);
-      const last = el.points[el.points.length - 1];
-      const lastScreen = worldToScreen(last.x, last.y);
-      const moved = Math.hypot(event.clientX - lastScreen.x, event.clientY - lastScreen.y);
-      if (moved >= PEN_SAMPLE_DIST_PX) el.points.push(pt);
+      // Every sample behind this event, not just the one that got delivered.
+      // At speed the browser merges moves, and those merged samples are
+      // exactly the ones that describe a fast corner.
+      for (const s of samplesFrom(event)) {
+        const pt = shared.tracker.push(s);
+        if (pt) storePoint(el, pt);
+      }
       const movedFromAnchor = Math.hypot(
         event.clientX - shared.holdAnchorX,
         event.clientY - shared.holdAnchorY

@@ -18,6 +18,18 @@ body {
   background: #1e1e22;
   color: #e6e6e6;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Drag-select is blocked here rather than by preventDefault() on
+     pointerdown, which would also suppress the compatibility mouse events
+     that dblclick-to-measure depends on. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+select,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 #stage {
@@ -32,11 +44,8 @@ body {
 #stage.pannable { cursor: grab; }
 
 /* ------------------------------------------------------------------
-   Toolbar — floating, top-center
+   Collapsible settings panel — secondary to the control wheel
 ------------------------------------------------------------------ */
-#toolbar { display: none; }
-
-/* Collapsible settings panel toggle */
 #panelToggle {
   position: fixed;
   top: 12px;
@@ -54,6 +63,12 @@ body {
 }
 
 #panelToggle:hover { background: rgba(40, 40, 48, 0.95); color: #fff; }
+
+#panelToggle:focus-visible {
+  outline: none;
+  border-color: #5aa0ff;
+  box-shadow: 0 0 0 2px rgba(90, 160, 255, 0.5);
+}
 
 /* ------------------------------------------------------------------
    Side panel — precision / scale settings (collapsible)

@@ -86,7 +86,6 @@ export const selectTool = {
 
   onPointerDown(app, event) {
     if (event.button !== 0 || app.interaction.spaceDown) return;
-    event.preventDefault();
     const scene = app.scene;
     const sx = event.clientX, sy = event.clientY;
     const world = screenToWorld(sx, sy);
