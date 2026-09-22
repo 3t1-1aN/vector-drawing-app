@@ -16,7 +16,7 @@
 // caching it would only churn.
 
 import { getRectCorners } from "../scene/element.js";
-import { getBrushPreset } from "./presets.js";
+import { getBrushPreset, TIP_FILL } from "./presets.js";
 import { maxTipRadius, rasterizeStroke } from "./engine.js";
 
 // Rasterises allowed per frame once an entry already exists. A brand new
@@ -144,15 +144,36 @@ function tipWidth(el, preset, dpr) {
 }
 
 /**
+ * How far the render-time spline can bow outside the points it was given.
+ *
+ * Sampled input is interpolated, and a centripetal Catmull-Rom leaves the
+ * hull of its control points by a fraction of the chord it spans — so sparse
+ * capture bows furthest. Every other brush hides that inside the padding its
+ * tip already needs. A fill has no tip to hide it in, and where a clipped
+ * hairline loses a sliver, a clipped fill gains a straight cut across a solid
+ * area. Measured worst case is an eighth of the chord; half leaves room.
+ */
+function splineSlack(points, preset, exact) {
+  if (exact || preset.tip !== TIP_FILL) return 0;
+  let maxChord = 0;
+  for (let i = 1; i < points.length; i++) {
+    const d = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    if (d > maxChord) maxChord = d;
+  }
+  return maxChord * 0.5;
+}
+
+/**
  * Where a committed stroke's bitmap sits in world space, and how big it is in
  * device pixels.
  *
  * The origin is snapped so it lands on a whole device pixel, which keeps the
  * 1:1 blit from resampling the stroke through a half-pixel filter.
  */
-function layout(el, points, preset, scale, dpr) {
+function layout(el, points, preset, scale, dpr, exact) {
   const baseWidth = tipWidth(el, preset, dpr);
-  const padWorld = (maxTipRadius(preset, baseWidth) + 2) / scale;
+  const padWorld = (maxTipRadius(preset, baseWidth) + 2) / scale
+                 + splineSlack(points, preset, exact);
   const b = boundsOf(points);
   if (!isFinite(b.minX)) return null;
   const originX = Math.floor((b.minX - padWorld) * scale) / scale;
@@ -179,7 +200,7 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
   const { points, closed, exact } = elementPolyline(el);
   if (points.length === 0) return;
 
-  const box = layout(el, points, preset, scale, dpr);
+  const box = layout(el, points, preset, scale, dpr, exact);
   if (!box || box.w <= 0 || box.h <= 0) return;
 
   const alpha = Math.max(0, Math.min(1, (st.opacity ?? 1) * preset.alphaMul * alphaScale));

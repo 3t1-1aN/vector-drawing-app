@@ -16,7 +16,8 @@ import { createIdElement, nextId, translateElement } from "./scene/element.js";
 import { GRID_MAJOR, GRID_MINOR } from "./render/grid.js";
 import { drawGrid } from "./render/grid.js";
 import { drawBackground } from "./render/background.js";
-import { appearance, BACKGROUNDS } from "./workspace/appearance.js";
+import { initWorkspacePanel } from "./ui/workspace-panel.js";
+import { isEngineering } from "./workspace/mode.js";
 import { initStyleWheel, styleWheelFrame } from "./ui/style-wheel.js";
 import { drawScene } from "./render/elements.js";
 import {
@@ -38,6 +39,7 @@ import { lineTool, rectTool, circleTool, penTool } from "./tools/draw.js";
 import { selectTool } from "./tools/select.js";
 import { nudgeTool } from "./tools/nudge.js";
 import { sliceTool } from "./tools/slice.js";
+import { eraserTool } from "./tools/erase.js";
 import { exportSvg, downloadText } from "./io/export-svg.js";
 import { serializeProject, deserializeProject, pickFile, readFileText } from "./io/project.js";
 import { openMeasureDialog, closeMeasureDialog, isOpen as measureDialogOpen } from "./ui/measure-dialog.js";
@@ -54,6 +56,7 @@ registerTool("circle", circleTool);
 registerTool("pen", penTool);
 registerTool("nudge", nudgeTool);
 registerTool("slice", sliceTool);
+registerTool("eraser", eraserTool);
 
 // --- Snap configuration -----------------------------------------------
 const SNAP_UNIT = GRID_MINOR;
@@ -72,6 +75,11 @@ const interaction = {
 };
 
 let activeTool = "line";
+
+// Counters for panX/zoom/cache occupancy. Useful while working on the
+// renderer, permanent clutter for everyone else, so it is off unless asked
+// for with F2 or `?debug`.
+let debugOverlayVisible = new URLSearchParams(location.search).has("debug");
 
 // The app object passed to every tool hook.
 const app = {
@@ -168,51 +176,10 @@ panelToggle.addEventListener("click", () => {
   const open = panel.classList.toggle("collapsed") === false;
   panelToggle.setAttribute("aria-expanded", String(open));
 });
-const bgSwatches = document.getElementById("bgSwatches");
-const bgCustomColor = document.getElementById("bgCustomColor");
-const gridToggle = document.getElementById("gridToggle");
-const gridTypeSel = document.getElementById("gridType");
-
-for (const [key, preset] of Object.entries(BACKGROUNDS)) {
-  const btn = document.createElement("button");
-  btn.dataset.bg = key;
-  btn.title = preset.label;
-  if (key === "transparent") btn.classList.add("swatch-transparent");
-  else if (key === "custom") btn.classList.add("swatch-custom");
-  else btn.style.background = preset.color;
-  btn.addEventListener("click", () => {
-    if (key === "custom") {
-      bgCustomColor.click();
-      return;
-    }
-    appearance.background = key;
-    syncWorkspacePanel();
-  });
-  bgSwatches.appendChild(btn);
-}
-
-bgCustomColor.addEventListener("input", () => {
-  appearance.background = "custom";
-  appearance.backgroundColor = bgCustomColor.value;
-  syncWorkspacePanel();
-});
-
-gridToggle.addEventListener("click", () => {
-  appearance.gridVisible = !appearance.gridVisible;
-  syncWorkspacePanel();
-});
-
-gridTypeSel.addEventListener("change", () => {
-  appearance.gridType = gridTypeSel.value;
-});
+const workspacePanel = initWorkspacePanel();
 
 function syncWorkspacePanel() {
-  for (const btn of bgSwatches.querySelectorAll("button")) {
-    btn.classList.toggle("active", btn.dataset.bg === appearance.background);
-  }
-  bgCustomColor.value = appearance.backgroundColor;
-  gridToggle.setAttribute("aria-pressed", String(appearance.gridVisible));
-  gridTypeSel.value = appearance.gridType;
+  workspacePanel.sync();
 }
 
 // --- Input routing -----------------------------------------------------
@@ -292,9 +259,12 @@ canvas.addEventListener(
   { passive: false }
 );
 
-// Double-click any measurable shape to type an exact dimension.
+// Double-click any measurable shape to type an exact dimension. Typing a
+// length is meaningless without a unit to type it in, so this follows the
+// rest of the measurement layer into Engineer.
 const PICK_TOLERANCE_PX = 8;
 canvas.addEventListener("dblclick", (event) => {
+  if (!isEngineering()) return;
   if (interaction.spaceDown || interaction.panning) return;
   event.preventDefault();
   const world = screenToWorld(event.clientX, event.clientY);
@@ -307,7 +277,7 @@ canvas.addEventListener("dblclick", (event) => {
 // --- Keyboard ----------------------------------------------------------
 const TOOL_KEYS = {
   KeyV: "select", KeyL: "line", KeyR: "rect", KeyC: "circle",
-  KeyP: "pen", KeyN: "nudge", KeyS: "slice",
+  KeyP: "pen", KeyN: "nudge", KeyS: "slice", KeyE: "eraser",
 };
 
 window.addEventListener("keydown", (event) => {
@@ -322,6 +292,12 @@ window.addEventListener("keydown", (event) => {
       interaction.spaceDown = true;
       canvas.classList.add("pannable");
     }
+    event.preventDefault();
+    return;
+  }
+
+  if (event.code === "F2") {
+    debugOverlayVisible = !debugOverlayVisible;
     event.preventDefault();
     return;
   }
@@ -412,25 +388,30 @@ function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBackground(ctx);
 
-  // World-space scene.
+  // World-space scene. Artboards are a drafting construct, so they travel
+  // with the rest of the measurement layer rather than with the drawing.
   applyViewTransform(ctx, view);
   drawGrid(ctx, view);
-  drawArtboardsWorld(ctx, view, scene.artboards);
+  const engineering = isEngineering();
+  if (engineering) drawArtboardsWorld(ctx, view, scene.artboards);
   const tool = getTool(activeTool);
   const preview = tool && tool.getPreview ? tool.getPreview(app) : null;
   drawShapeGuides(ctx, view, preview);
   drawScene(ctx, scene, view, preview);
 
-  // Screen-space overlays.
+  // Screen-space overlays. The whole measurement layer is Engineer-only;
+  // dimensionMode still decides its form, but only once it is on screen.
   resetToScreenSpace(ctx);
-  if (scaleSettings.dimensionMode === "cad") {
-    drawCadDimensions(ctx, scene, view, preview ? preview.element : null);
-    drawLiveCadDimension(ctx, preview, view);
-  } else if (scaleSettings.dimensionMode === "labels") {
-    drawCommittedMeasurements(ctx, scene, view, preview ? preview.element : null);
-    drawMeasurementLabel(ctx, preview, view);
+  if (engineering) {
+    if (scaleSettings.dimensionMode === "cad") {
+      drawCadDimensions(ctx, scene, view, preview ? preview.element : null);
+      drawLiveCadDimension(ctx, preview, view);
+    } else if (scaleSettings.dimensionMode === "labels") {
+      drawCommittedMeasurements(ctx, scene, view, preview ? preview.element : null);
+      drawMeasurementLabel(ctx, preview, view);
+    }
+    drawArtboardLabels(ctx, view, scene.artboards);
   }
-  drawArtboardLabels(ctx, view, scene.artboards);
 
   // Selection handles / marquee / slice blade.
   if (tool && tool.getOverlay) {
@@ -445,23 +426,50 @@ function render() {
     const sl = tool.getSlice(app);
     if (sl) drawSliceBlade(ctx, sl);
   }
+  if (tool && tool.getEraser) {
+    const er = tool.getEraser(app);
+    if (er) drawEraser(ctx, er);
+  }
 
-  drawScaleBar(ctx, view);
-  drawDebugOverlay();
+  if (engineering) drawScaleBar(ctx, view);
+  if (debugOverlayVisible) drawDebugOverlay();
   styleWheelFrame(app);
 }
 
-function drawSliceBlade(ctx, sl) {
-  const a = worldToScreen(sl.a.x, sl.a.y);
-  const b = worldToScreen(sl.b.x, sl.b.y);
-  ctx.strokeStyle = "rgba(255, 90, 90, 0.95)";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 4]);
+function drawEraser(ctx, er) {
+  const c = worldToScreen(er.x, er.y);
+  const r = Math.max(1, er.r * view.zoom);
   ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
+  ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255, 90, 90, 0.95)";
+  ctx.lineWidth = 1.5;
   ctx.stroke();
-  ctx.setLineDash([]);
+}
+
+function drawSliceBlade(ctx, sl) {
+  const pts = sl.points;
+  if (!pts || pts.length === 0) return;
+  const r = Math.max(1, sl.r * view.zoom);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(255, 90, 90, 0.85)";
+  ctx.fillStyle = "rgba(255, 90, 90, 0.85)";
+  if (pts.length === 1) {
+    const p = worldToScreen(pts[0].x, pts[0].y);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+  ctx.beginPath();
+  const p0 = worldToScreen(pts[0].x, pts[0].y);
+  ctx.moveTo(p0.x, p0.y);
+  for (let i = 1; i < pts.length; i++) {
+    const p = worldToScreen(pts[i].x, pts[i].y);
+    ctx.lineTo(p.x, p.y);
+  }
+  ctx.lineWidth = r * 2;
+  ctx.stroke();
 }
 
 function drawDebugOverlay() {

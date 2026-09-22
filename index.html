@@ -10,64 +10,101 @@
 <body>
   <canvas id="stage"></canvas>
 
-  <!-- Precision + project panel. Collapsible so the hub stays primary. -->
+  <!-- Workspace panel. Collapsible so the hub stays primary. The mode
+       switch at the top decides how much of it exists: Draw carries paper,
+       grid and project, Engineer adds the measurement stack. -->
   <button id="panelToggle" aria-label="Toggle settings panel" aria-expanded="false" title="Settings">⚙</button>
   <div id="panel" class="collapsed">
-    <h2>Workspace</h2>
-    <div class="row">
-      <label>Background</label>
+    <div id="modeSwitch" class="segmented" role="radiogroup" aria-label="Workspace">
+      <button type="button" data-mode="draw" role="radio" aria-checked="true"
+              title="Paper and brushes">Draw</button>
+      <button type="button" data-mode="engineer" role="radio" aria-checked="false"
+              title="Units, dimensions and artboards">Engineer</button>
     </div>
+
+    <h2>Paper</h2>
     <div id="bgSwatches" class="swatch-row"></div>
     <input id="bgCustomColor" type="color" value="#f5f0e8" class="hidden-input" />
     <div class="row">
-      <label for="gridType">Grid</label>
-      <div class="grid-controls">
-        <select id="gridType">
-          <option value="graph">Graph</option>
-          <option value="dot">Dot</option>
-          <option value="lined">Lined</option>
-          <option value="isometric">Isometric</option>
-        </select>
-        <button id="gridToggle" class="circle-toggle" aria-pressed="true" title="Toggle grid"></button>
+      <span id="textureLabel" class="field-label">Texture</span>
+      <button id="textureToggle" class="switch" role="switch" aria-pressed="true"
+              aria-labelledby="textureLabel" title="Paper grain"><span></span></button>
+    </div>
+
+    <div class="section-head">
+      <h2 id="gridHeading">Grid</h2>
+      <button id="gridToggle" class="switch" role="switch" aria-pressed="true"
+              aria-labelledby="gridHeading" title="Show grid"><span></span></button>
+    </div>
+    <div id="gridPatterns" class="pattern-row"></div>
+    <div id="gridFields" class="field-stack">
+      <div class="row">
+        <label for="gridOpacity">Strength</label>
+        <input id="gridOpacity" type="range" min="5" max="100" step="1" value="45" />
+      </div>
+      <div class="row">
+        <label for="gridColor">Colour</label>
+        <div class="color-controls">
+          <button id="gridColorAuto" type="button" class="chip" title="Contrast with the paper">Auto</button>
+          <input id="gridColor" type="color" value="#465064" class="color-chip" title="Pick a grid colour" />
+        </div>
       </div>
     </div>
-    <h2>Precision</h2>
-    <div class="row">
-      <label for="unit">Unit</label>
-      <select id="unit">
-        <option value="m">meters</option>
-        <option value="mm">millimeters</option>
-        <option value="cm">centimeters</option>
-        <option value="ft">feet</option>
-        <option value="in">inches</option>
-      </select>
+    <div id="engineerOnly">
+      <h2>Scale</h2>
+      <div class="field-stack">
+        <div class="row">
+          <label for="unit">Unit</label>
+          <select id="unit">
+            <option value="m">meters</option>
+            <option value="mm">millimeters</option>
+            <option value="cm">centimeters</option>
+            <option value="ft">feet</option>
+            <option value="in">inches</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="scale">1 unit =</label>
+          <input id="scale" type="number" min="0.0001" step="0.1" value="1" />
+        </div>
+        <div class="row">
+          <label for="showDims">Dimensions</label>
+          <select id="showDims">
+            <option value="cad">CAD</option>
+            <option value="labels">Labels</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+      </div>
+
+      <h2>Artboard</h2>
+      <div class="actions-row">
+        <button id="addArtboard" title="Add an artboard framing the current view">Add at view</button>
+      </div>
     </div>
-    <div class="row">
-      <label for="scale">1 unit =</label>
-      <input id="scale" type="number" min="0.0001" step="0.1" value="1" />
-    </div>
-    <div class="row">
-      <label for="showDims">Dimensions</label>
-      <select id="showDims">
-        <option value="cad">CAD</option>
-        <option value="labels">Labels</option>
-        <option value="off">Off</option>
-      </select>
-    </div>
-    <h2>Artboard</h2>
-    <div class="actions">
-      <button id="addArtboard">+ Add artboard at view</button>
-      <button id="fitArtboard">Zoom to fit all</button>
-    </div>
+
     <h2>Project</h2>
-    <div class="actions">
-      <button id="saveProject">Save .vda</button>
-      <button id="loadProject">Load .vda…</button>
-      <button id="exportSvg">Export SVG</button>
+    <div class="actions-row three">
+      <button id="saveProject" title="Save a .vda project file">Save</button>
+      <button id="loadProject" title="Open a .vda project file">Open</button>
+      <button id="exportSvg" title="Export the drawing as SVG">SVG</button>
     </div>
-    <div class="hint">
-      Pan: Space+drag or middle-drag. Zoom: wheel. Undo/redo: Ctrl+Z / Ctrl+Shift+Z. Delete: Del. Duplicate: Ctrl+D. Double-click a shape to edit its measurement.
+    <div class="actions-row">
+      <button id="fitArtboard" title="Zoom so everything fits on screen">Zoom to fit</button>
     </div>
+
+    <details class="shortcuts">
+      <summary>Shortcuts</summary>
+      <dl>
+        <dt>Pan</dt><dd>Space-drag or middle-drag</dd>
+        <dt>Zoom</dt><dd>Wheel</dd>
+        <dt>Undo</dt><dd>Ctrl+Z / Ctrl+Shift+Z</dd>
+        <dt>Delete</dt><dd>Del</dd>
+        <dt>Duplicate</dt><dd>Ctrl+D</dd>
+        <dt class="engineer-only-hint">Measure</dt>
+        <dd class="engineer-only-hint">Double-click a shape</dd>
+      </dl>
+    </details>
   </div>
 
   <!-- Measurement editor — opens on double-click of a shape. -->

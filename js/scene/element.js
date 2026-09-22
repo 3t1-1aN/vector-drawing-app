@@ -14,6 +14,7 @@
 //   path:     { id, type:'path',   points:[{x,y}], style }
 
 import { brushToStyle } from "../brush/active-brush.js";
+import { isFilledMedium } from "../brush/presets.js";
 
 let _idCounter = 1;
 export function nextId() {
@@ -146,12 +147,55 @@ function segmentsOf(el) {
   }
 }
 
+/** Outline vertices of an element, for area tests. Circles stay analytic. */
+function ringOf(el) {
+  switch (el.type) {
+    case "rect":
+    case "square":
+      return getRectCorners(el);
+    case "triangle":
+      return el.corners;
+    case "path":
+      return el.points;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Even-odd point-in-polygon. The ring closes implicitly, matching the closing
+ * edge the renderer draws.
+ */
+function pointInRing(ring, x, y) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if ((a.y > y) !== (b.y > y) &&
+        x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 /**
  * Hit test an element at a world point. `toleranceWorld` is the pick
  * radius in world units (caller converts screen px -> world via /zoom).
  * Returns true if the point lies on the element's outline.
  */
 export function hitTest(el, worldX, worldY, toleranceWorld) {
+  // A filled medium inks a solid area, so it has to be pickable anywhere
+  // inside it and not just along the contour. Testing even-odd keeps the
+  // holes a self-crossing stroke punched click-through, the way they look.
+  if (isFilledMedium(el.style?.medium)) {
+    if (el.type === "circle") {
+      if (Math.hypot(worldX - el.cx, worldY - el.cy) <= el.r) return true;
+    } else {
+      const ring = ringOf(el);
+      if (ring && ring.length >= 3 && pointInRing(ring, worldX, worldY)) return true;
+    }
+  }
   if (el.type === "circle") {
     const d = Math.abs(Math.hypot(worldX - el.cx, worldY - el.cy) - el.r);
     return d <= toleranceWorld;

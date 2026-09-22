@@ -14,9 +14,10 @@
 //    stamp, or the grain doubles up along the trail.
 //
 // The tip families diverge only in how they fill the mask: round tips stamp a
-// sprite, ribbon and nib tips fill a variable-width outline.
+// sprite, ribbon and nib tips fill a variable-width outline, and the fill tip
+// has no tip at all — it inks the area the path encloses.
 
-import { TIP_NIB, TIP_RIBBON, TIP_ROUND } from "./presets.js";
+import { TIP_FILL, TIP_NIB, TIP_RIBBON, TIP_ROUND } from "./presets.js";
 import { buildNodes } from "./physics.js";
 import { getPaperTile, getTipSprites, hashNoise, PAPER_TILE_PX, spriteFor } from "./tips.js";
 
@@ -64,6 +65,9 @@ function dirtyRect(nodes, w, h, preset, baseWidth) {
  * soft edge and low-speed swell are never clipped.
  */
 export function maxTipRadius(preset, baseWidth) {
+  // A fill has no tip to spread: its edge is the path, so all it needs is
+  // room for the antialiased rim.
+  if (preset.tip === TIP_FILL) return 2;
   const pool = preset.nib ? 1 + preset.nib.pool : 1;
   return (baseWidth / 2) * pool * 1.35 + 2;
 }
@@ -211,6 +215,29 @@ function fillNib(ctx, nodes, preset) {
   }
 }
 
+/**
+ * The area the path encloses, rather than the path itself.
+ *
+ * Closing back to the start with a straight edge is what lets a stroke that
+ * was lifted early still read as a shape — it gets cut off rather than
+ * curved shut. Even-odd is the whole character of the brush: loop back over
+ * your own stroke and the re-enclosed part drops out as a hole, cross it once
+ * more and it comes back.
+ *
+ * Accumulating into the mask rather than painting straight to the canvas is
+ * what keeps a translucent fill honest, since a shape that overlaps itself
+ * would otherwise double its own opacity.
+ */
+function fillArea(ctx, nodes) {
+  if (nodes.length < 3) return;
+  ctx.globalAlpha = 1;
+  ctx.beginPath();
+  ctx.moveTo(nodes[0].x, nodes[0].y);
+  for (let i = 1; i < nodes.length; i++) ctx.lineTo(nodes[i].x, nodes[i].y);
+  ctx.closePath();
+  ctx.fill("evenodd");
+}
+
 function fillDot(ctx, n) {
   ctx.globalAlpha = 1;
   ctx.beginPath();
@@ -315,6 +342,7 @@ export function rasterizeStroke(points, opts) {
   if (preset.tip === TIP_ROUND) stampRound(ctx, nodes, preset, originX, originY, scale);
   else if (preset.tip === TIP_NIB) fillNib(ctx, nodes, preset);
   else if (preset.tip === TIP_RIBBON) fillRibbon(ctx, nodes, preset);
+  else if (preset.tip === TIP_FILL) fillArea(ctx, nodes);
 
   let meanSpeed = 0;
   for (const n of nodes) meanSpeed += n.v;

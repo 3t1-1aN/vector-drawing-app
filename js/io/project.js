@@ -6,6 +6,7 @@ import { cloneElement, createIdElement } from "../scene/element.js";
 import { scaleSettings } from "../precision/scale.js";
 import { view } from "../core/view.js";
 import { appearance } from "../workspace/appearance.js";
+import { workspace, setWorkspaceMode } from "../workspace/mode.js";
 import { activeBrush } from "../brush/active-brush.js";
 
 const FORMAT_VERSION = 2;
@@ -17,6 +18,7 @@ export function serializeProject(scene) {
     view: { panX: view.panX, panY: view.panY, zoom: view.zoom },
     scale: { ...scaleSettings },
     appearance: { ...appearance },
+    workspace: { ...workspace },
     brush: { ...activeBrush },
     artboards: scene.artboards.map((a) => ({ ...a })),
     elements: scene.elements.map((el) => cloneElement(el)),
@@ -37,6 +39,13 @@ export function deserializeProject(data, scene) {
   // Version 1 files have no appearance/brush blocks; keep current settings.
   if (data.appearance) Object.assign(appearance, data.appearance);
   if (data.brush) Object.assign(activeBrush, data.brush);
+  // Files saved before the two workspaces existed still say whether they
+  // were drawn against measurements, so honour that rather than dropping
+  // an engineering drawing into Draw and hiding all of its dimensions.
+  if (data.workspace && data.workspace.mode) setWorkspaceMode(data.workspace.mode);
+  else if (data.artboards?.length || scaleSettings.dimensionMode !== "off") {
+    setWorkspaceMode("engineer");
+  }
   scene.artboards = (data.artboards || []).map((a) => ({ ...a }));
   scene.elements = (data.elements || []).map((el) => createIdElement(el.type, stripId(el)));
   scene.clearSelection();

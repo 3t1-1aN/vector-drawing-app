@@ -30,7 +30,7 @@
 // and interaction code do not need to change.
 
 import { activeBrush, setBrush, subscribeStyle } from "../brush/active-brush.js";
-import { BRUSH_PRESETS, getBrushPreset } from "../brush/presets.js";
+import { BRUSH_PRESETS, getBrushPreset, isFilledMedium } from "../brush/presets.js";
 import { StyleCommand } from "../scene/scene.js";
 import {
   initColorPicker, openColorPicker, closeColorPicker, isColorPickerOpen,
@@ -63,6 +63,16 @@ const MAX_WIDTH = 24;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
+// Brush previews. Every medium but one leaves a line, so the samples are the
+// same gesture drawn both ways: as the trail a tip would leave, and as the
+// area a fill would ink between the same two ends.
+const HUB_SAMPLE_STROKE = "M6 21 C 22 4, 50 26, 66 9";
+const HUB_SAMPLE_FILL =
+  "M6 21 C 13 8, 26 5, 36 11 C 46 17, 57 14, 66 9 C 68 19, 56 26, 42 26 C 27 26, 12 26, 6 21 Z";
+const MEDIA_SAMPLE_STROKE = "M3 14 C 14 2, 30 16, 53 5";
+const MEDIA_SAMPLE_FILL =
+  "M3 14 C 10 4, 20 11, 29 8 C 39 5, 47 8, 53 5 C 54 12, 45 16, 32 16 C 19 16, 8 17, 3 14 Z";
+
 // Property arcs: three 90-degree sectors with 30-degree gaps, each sweeping
 // clockwise so "further clockwise" always means "more". Angles may exceed 360;
 // polar() is periodic and angleToT() normalizes the wrap.
@@ -89,11 +99,12 @@ const PRESETS = {
 // Keyboard step per arrow press.
 const KEY_STEP = { size: 0.5, opacity: 0.05, smoothing: 0.05 };
 
-// Tool slots, evenly spaced 45 degrees apart over a 270-degree sweep that
-// starts at the lower left and ends at the lower right. The remaining gap at
-// the bottom holds undo/redo, so nothing overlaps.
+// Tool slots share a 270-degree sweep that starts at the lower left and ends
+// at the lower right. The step follows the slot count, so adding a tool
+// tightens the spacing instead of landing on undo/redo, which sit in the
+// gap left at the bottom.
 const TOOL_START_DEG = 135;
-const TOOL_STEP_DEG = 45;
+const TOOL_SWEEP_DEG = 270;
 const UNDO_DEG = 112.5;
 const REDO_DEG = 67.5;
 
@@ -105,6 +116,7 @@ const TOOL_SLOTS = [
   { id: "pen", label: "Pen", kbd: "P", icon: "pen", hasMedium: true },
   { id: "nudge", label: "Nudge", kbd: "N", icon: "nudge", hasMedium: false },
   { id: "slice", label: "Slice", kbd: "S", icon: "slice", hasMedium: false },
+  { id: "eraser", label: "Eraser", kbd: "E", icon: "eraser", hasMedium: false },
 ];
 
 let root = null;
@@ -199,6 +211,10 @@ const ICONS = {
     { tag: "path", d: "M3 12 L9 12" },
     { tag: "path", d: "M15 12 L21 12" },
     { tag: "path", d: "M10 7 L14 17" },
+  ],
+  eraser: [
+    { tag: "path", d: "M8.2 19.2 L4.4 15.4 L13.6 6.2 L17.4 10 Z" },
+    { tag: "path", d: "M12.4 7.4 L15.6 10.6" },
   ],
   undo: [
     { tag: "path", d: "M8.5 8 H14.5 A5 5 0 1 1 14.5 18 H9" },
@@ -322,6 +338,16 @@ function setPropValue(key, v) {
 
 /** Smoothing is not element geometry, so it never needs an undo record. */
 function isUndoable(key) { return key !== "smoothing"; }
+
+/**
+ * Size describes a tip, and a fill has none — how far it reaches is decided
+ * by the path you draw. The groove stays in its slot but goes inert rather
+ * than letting you set a number that changes nothing on screen. The value
+ * itself is kept, so switching back to an outline medium restores the weight.
+ */
+function isPropInert(key) {
+  return key === "size" && isFilledMedium(currentStyle().medium);
+}
 
 // --- DOM ---------------------------------------------------------------------
 
@@ -474,8 +500,9 @@ function buildToolRing() {
     cx: C, cy: C, r: HUB_SOCKET_R - 0.5, class: "sw-socket-rim", stroke: "url(#swgRecessRim)",
   }));
 
+  const toolStep = TOOL_SWEEP_DEG / (TOOL_SLOTS.length - 1);
   TOOL_SLOTS.forEach((t, i) => {
-    const deg = TOOL_START_DEG + i * TOOL_STEP_DEG;
+    const deg = TOOL_START_DEG + i * toolStep;
     const p = polar(deg, TOOL_R);
     const btn = svgEl("g", {
       class: "sw-tool", "data-tool": t.id, cursor: "pointer",
@@ -653,10 +680,11 @@ function buildPropRing() {
     // is only touched once the pointer actually moves, so opening the panel
     // never nudges the setting.
     const onPress = (e) => {
-      pressCandidate = { key: def.key, x: e.clientX, y: e.clientY };
-      cancelHoverPeek();
       e.preventDefault();
       e.stopPropagation();
+      if (isPropInert(def.key)) return;
+      pressCandidate = { key: def.key, x: e.clientX, y: e.clientY };
+      cancelHoverPeek();
     };
     hit.addEventListener("mousedown", onPress);
     handle.addEventListener("mousedown", onPress);
@@ -664,11 +692,12 @@ function buildPropRing() {
       e.preventDefault();
       e.stopPropagation();
       cancelHoverPeek();
+      if (isPropInert(def.key)) return;
       togglePopover(def.key, true);
     });
 
     group.addEventListener("mouseenter", (e) => {
-      scheduleHoverPeek(def.key);
+      if (!isPropInert(def.key)) scheduleHoverPeek(def.key);
       showTooltip(`${def.label} · ${propText(def.key)}`, e.clientX, e.clientY);
     });
     group.addEventListener("mousemove", (e) => {
@@ -680,6 +709,7 @@ function buildPropRing() {
     group.addEventListener("mouseleave", () => { scheduleHoverDismiss(); hideTooltip(); });
 
     group.addEventListener("keydown", (e) => {
+      if (isPropInert(def.key)) return;
       const step = KEY_STEP[def.key];
       let next = null;
       if (e.key === "ArrowUp" || e.key === "ArrowRight") next = propValue(def.key) + step;
@@ -726,7 +756,7 @@ function buildHub() {
   const strokeWrap = document.createElementNS(SVG_NS, "svg");
   strokeWrap.setAttribute("class", "wheel-hub-sample");
   strokeWrap.setAttribute("viewBox", "0 0 72 30");
-  hubStroke = svgEl("path", { d: "M6 21 C 22 4, 50 26, 66 9", class: "wheel-hub-sample-path" });
+  hubStroke = svgEl("path", { d: HUB_SAMPLE_STROKE, class: "wheel-hub-sample-path" });
   strokeWrap.appendChild(hubStroke);
 
   hubHex = document.createElement("span");
@@ -1003,15 +1033,22 @@ function buildMediumPopover() {
     const sample = document.createElementNS(SVG_NS, "svg");
     sample.setAttribute("class", "wheel-medium-sample");
     sample.setAttribute("viewBox", "0 0 56 18");
-    const path = svgEl("path", {
-      d: "M3 14 C 14 2, 30 16, 53 5",
-      fill: "none",
-      stroke: currentStyle().stroke,
-      "stroke-width": Math.max(1.2, Math.min(7, 2.4 * m.swatch.widthMul)),
-      "stroke-linecap": "round",
-      "stroke-dasharray": m.swatch.dash ? m.swatch.dash.join(" ") : "none",
-      opacity: m.swatch.alphaMul,
-    });
+    const path = svgEl("path", m.swatch.filled
+      ? {
+          d: MEDIA_SAMPLE_FILL,
+          fill: currentStyle().stroke,
+          stroke: "none",
+          opacity: m.swatch.alphaMul,
+        }
+      : {
+          d: MEDIA_SAMPLE_STROKE,
+          fill: "none",
+          stroke: currentStyle().stroke,
+          "stroke-width": Math.max(1.2, Math.min(7, 2.4 * m.swatch.widthMul)),
+          "stroke-linecap": "round",
+          "stroke-dasharray": m.swatch.dash ? m.swatch.dash.join(" ") : "none",
+          opacity: m.swatch.alphaMul,
+        });
     sample.appendChild(path);
 
     const label = document.createElement("span");
@@ -1198,6 +1235,9 @@ function syncUi(force) {
     // Fill the travelled part of the arc so the value reads without the label.
     els.fill.setAttribute("d", t > 0.001 ? arcPathD(def.arc.start, deg, PROP_R) : "");
     setReadout(els.readout, def.key);
+    const inert = isPropInert(def.key);
+    els.group.classList.toggle("inert", inert);
+    els.group.setAttribute("aria-disabled", String(inert));
     els.group.setAttribute("aria-valuenow", String(Math.round(t * 100)));
     els.group.setAttribute("aria-valuetext", propText(def.key));
   }
@@ -1229,8 +1269,12 @@ function syncHub(st) {
   const light = relativeLuminance(color) > 0.45;
   hubBtn.classList.toggle("on-light", light);
   // The sample reads as the instrument itself: weight, dash and translucency
-  // all come from what would actually be drawn right now.
+  // all come from what would actually be drawn right now — or, for a fill,
+  // the area it would ink instead of any line at all.
   const sw = currentSwatch();
+  hubStroke.classList.toggle("filled", !!sw.filled);
+  hubStroke.setAttribute("d", sw.filled ? HUB_SAMPLE_FILL : HUB_SAMPLE_STROKE);
+  hubStroke.setAttribute("fill-opacity", String(sw.alphaMul));
   const sampleW = (st.strokeWidth ?? 2) * sw.widthMul;
   hubStroke.setAttribute("stroke-width", String(Math.max(1, Math.min(9, sampleW))));
   hubStroke.setAttribute("stroke-dasharray", sw.dash ? sw.dash.join(" ") : "none");

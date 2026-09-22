@@ -267,6 +267,17 @@
 #styleWheel .sw-prop:hover .sw-track { stroke: rgba(255, 255, 255, 0.12); }
 #styleWheel .sw-prop:hover .sw-fill { stroke: rgba(240, 244, 250, 0.85); }
 
+/* A groove with nothing to adjust — size under a fill medium. The channel
+   stays milled into the well so the wheel keeps its shape; only the parts
+   that carry a value recede, and the knob stops inviting a grab. */
+#styleWheel .sw-prop.inert .sw-fill,
+#styleWheel .sw-prop.inert .sw-knob { opacity: 0.22; }
+#styleWheel .sw-prop.inert .sw-knob { cursor: default; }
+#styleWheel .sw-prop.inert .sw-readout { opacity: 0.3; }
+#styleWheel .sw-prop.inert:hover .sw-track { stroke: rgba(255, 255, 255, 0.07); }
+#styleWheel .sw-prop.inert:hover .sw-fill { stroke: rgba(226, 232, 241, 0.62); }
+#styleWheel .sw-prop.inert:hover .sw-knob-body { transform: none; }
+
 /* Preset detents notched across the groove floor. */
 #styleWheel .sw-prop-tick {
   stroke: rgba(0, 0, 0, 0.5);
@@ -444,6 +455,12 @@
   filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.45));
 }
 
+/* A fill leaves no line, so its sample is the area instead of the trail. */
+.wheel-hub-sample-path.filled {
+  fill: rgba(255, 255, 255, 0.94);
+  stroke: none;
+}
+
 .wheel-hub-hex {
   position: relative;
   font: 500 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -460,6 +477,11 @@
 #wheelColor.on-light .wheel-hub-sample-path {
   stroke: rgba(12, 12, 16, 0.88);
   filter: none;
+}
+
+#wheelColor.on-light .wheel-hub-sample-path.filled {
+  fill: rgba(12, 12, 16, 0.88);
+  stroke: none;
 }
 
 #wheelColor.on-light .wheel-hub-hex {

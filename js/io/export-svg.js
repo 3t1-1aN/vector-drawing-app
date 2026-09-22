@@ -5,7 +5,7 @@
 
 import { getRectCorners } from "../scene/element.js";
 import { scaleSettings, UNITS } from "../precision/scale.js";
-import { getBrushPreset } from "../brush/presets.js";
+import { getBrushPreset, isFilledMedium } from "../brush/presets.js";
 
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -20,8 +20,15 @@ function ptsToStr(points) {
 // its previews. The export is a faithful outline, not a picture of the brush;
 // anything else would mean emitting thousands of filled polygons per stroke.
 function brushSvgAttrs(el) {
-  const sw = getBrushPreset(el.style.medium || "pen").swatch;
+  const preset = getBrushPreset(el.style.medium || "pen");
+  const sw = preset.swatch;
   const baseOpacity = el.style.opacity ?? 1;
+  // A fill is the one medium SVG can reproduce exactly, down to the winding
+  // rule, so it exports as the shape it is rather than as an outline.
+  if (isFilledMedium(el.style.medium)) {
+    const opacity = baseOpacity * sw.alphaMul;
+    return `fill="${el.style.stroke || "#888"}" fill-rule="evenodd" fill-opacity="${opacity.toFixed(3)}" stroke="none"`;
+  }
   const width = (el.style.strokeWidth || 2) * sw.widthMul;
   const opacity = baseOpacity * sw.alphaMul;
   let attrs = `fill="none" stroke="${el.style.stroke || "#888"}" stroke-width="${width.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${opacity.toFixed(3)}"`;
@@ -48,7 +55,10 @@ function elementToSvg(el) {
     case "path":
       if (el.points.length < 2) return "";
       const d = "M " + el.points.map((p) => `${p.x.toFixed(3)} ${p.y.toFixed(3)}`).join(" L ");
-      return `  <path ${common} d="${d}" />`;
+      // The renderer closes a fill back to its start; the export has to spell
+      // that edge out or the shape opens up outside the app.
+      const close = isFilledMedium(el.style.medium) ? " Z" : "";
+      return `  <path ${common} d="${d}${close}" />`;
     default:
       return "";
   }

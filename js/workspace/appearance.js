@@ -18,6 +18,10 @@ export const GRID_TYPES = ["graph", "dot", "lined", "isometric"];
 export const appearance = {
   background: "paper-warm",
   backgroundColor: "#f5f0e8", // used when background === "custom"
+  // Paper grain. Off leaves the flat base colour, which is what you want
+  // for clean export-style output and on low-contrast displays where the
+  // tooth reads as dirt. The preset's colour is unchanged either way.
+  paperTexture: true,
   gridVisible: true,
   gridType: "graph", // graph | dot | lined | isometric
   gridOpacity: 0.45,

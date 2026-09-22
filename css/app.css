@@ -74,22 +74,46 @@ textarea {
    Side panel — precision / scale settings (collapsible)
 ------------------------------------------------------------------ */
 #panel {
+  /* Same surfaces and timings as the console, so the two read as parts of
+     one instrument rather than two dark rectangles that happen to share a
+     screen. See css/style-wheel.css for where these come from. */
+  --panel-body: rgba(30, 31, 36, 0.965);
+  --panel-ink: #8d93a1;
+  --panel-ink-hi: #eceef3;
+  --panel-quick: 110ms;
+  --panel-ease-time: 150ms;
+  --panel-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
   position: fixed;
   top: 54px;
   right: 12px;
-  width: 220px;
-  padding: 12px;
-  background: rgba(20, 20, 24, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  width: 232px;
+  max-height: calc(100vh - 68px);
+  overflow-y: auto;
+  /* Reserve the gutter in both modes. Engineer overflows and Draw does not,
+     and without this the preview tiles resize every time you switch. */
+  scrollbar-gutter: stable;
+  padding: 13px;
+  background: var(--panel-body);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 11px;
   backdrop-filter: blur(6px);
+  /* Contact shadow plus an ambient one: the panel rests on the canvas. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 1px rgba(0, 0, 0, 0.4),
+    0 9px 20px rgba(0, 0, 0, 0.36);
   z-index: 10;
   user-select: none;
   font-size: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  gap: 11px;
+  transition:
+    opacity var(--panel-ease-time) var(--panel-ease),
+    transform var(--panel-ease-time) var(--panel-ease);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 
 #panel.collapsed {
@@ -99,12 +123,37 @@ textarea {
 }
 
 #panel h2 {
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #8a8a96;
+  letter-spacing: 0.09em;
+  color: #6e7480;
   font-weight: 600;
 }
+
+/* Hairline above each section so the panel reads as machined bands. The
+   mode switch is always the first child, so every heading below it earns
+   one; the heading nested inside a section-head is not its own band. */
+#panel h2,
+#panel .section-head {
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+#panel .section-head h2 {
+  padding-top: 0;
+  border-top: none;
+}
+
+/* Engineer-only block: its own band stack, and genuinely gone in Draw
+   rather than collapsed to a zero-height flex item. */
+#engineerOnly {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+#engineerOnly[hidden] { display: none; }
+.engineer-only-hint[hidden] { display: none; }
 
 #panel .row {
   display: flex;
@@ -113,73 +162,301 @@ textarea {
   gap: 8px;
 }
 
-#panel label { color: #b8b8c0; }
+/* A <label for> cannot point at a button, so switch rows name themselves
+   with a span and aria-labelledby. Both read the same. */
+#panel label,
+#panel .field-label { color: #b8b8c0; }
 
 #panel select,
 #panel input[type="number"] {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e6e6e6;
-  border-radius: 6px;
-  padding: 4px 6px;
-  font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  width: 92px;
-}
-
-#panel .actions { display: flex; flex-direction: column; gap: 6px; }
-
-#panel .actions button {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
-  color: #cfcfd6;
-  font: 500 12px/1 inherit;
-  padding: 7px 8px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #c9ced9;
   border-radius: 6px;
+  padding: 6px 8px;
+  font: 11.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  width: 100px;
   cursor: pointer;
-  text-align: left;
-}
-#panel .actions button:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-
-#panel .hint {
-  color: #6a6a74;
-  font-size: 11px;
-  line-height: 1.4;
+  transition: background var(--panel-quick) var(--panel-ease);
 }
 
-/* Workspace: background swatches + grid controls */
-.swatch-row {
-  display: flex;
-  flex-wrap: wrap;
+/* The native dropdown arrow is the one piece of OS chrome left in the
+   panel, so it is replaced with a chevron in the panel's own ink. */
+#panel select {
+  padding-right: 22px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #7c828e 50%),
+    linear-gradient(135deg, #7c828e 50%, transparent 50%);
+  background-position: right 11px top 50%, right 7px top 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+
+#panel select:hover,
+#panel input[type="number"]:hover { background-color: rgba(255, 255, 255, 0.08); }
+
+#panel select:focus-visible,
+#panel input[type="number"]:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* --- Mode switch ------------------------------------------------------
+   Two named workspaces, shown as one track with the active half seated
+   into it. A segmented control rather than a checkbox because neither
+   side is the "off" state -- Draw is not Engineer switched off. */
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.42);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.segmented button {
+  appearance: none;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: #7c828e;
+  font: 600 11px/1 inherit;
+  letter-spacing: 0.05em;
+  padding: 7px 4px;
+  cursor: pointer;
+  transition:
+    background var(--panel-quick) var(--panel-ease),
+    color var(--panel-quick) var(--panel-ease);
+}
+
+.segmented button:hover { color: #b6bcc8; }
+
+.segmented button.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--panel-ink-hi);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.segmented button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* --- Action rows ------------------------------------------------------ */
+.actions-row {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 6px;
 }
 
-.swatch-row button {
+.actions-row.three { grid-template-columns: repeat(3, 1fr); }
+
+.actions-row button {
   appearance: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--panel-ink);
+  font: 500 11.5px/1 inherit;
+  padding: 8px 6px;
+  border-radius: 6px;
   cursor: pointer;
-  padding: 0;
+  transition:
+    background var(--panel-quick) var(--panel-ease),
+    color var(--panel-quick) var(--panel-ease);
 }
 
-.swatch-row button:hover { border-color: rgba(255, 255, 255, 0.4); }
-.swatch-row button.active {
-  border-color: #9cc8ff;
-  box-shadow: 0 0 0 2px rgba(90, 160, 255, 0.35);
+.actions-row button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #c9ced9;
 }
 
-.swatch-row button.swatch-transparent {
+.actions-row button:active { transform: translateY(1px); }
+
+.actions-row button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* --- Shortcuts -------------------------------------------------------- */
+/* Folded away by default: it is reference material, not a control, and it
+   was the single largest block of standing text in the panel. */
+.shortcuts {
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  padding-top: 9px;
+}
+
+.shortcuts summary {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #6e7480;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.shortcuts summary::-webkit-details-marker { display: none; }
+
+.shortcuts summary::after {
+  content: "+";
+  float: right;
+  font-size: 12px;
+  line-height: 0.85;
+  color: #5c6270;
+}
+
+.shortcuts[open] summary::after { content: "\2212"; }
+
+.shortcuts summary:hover { color: #b6bcc8; }
+
+.shortcuts summary:focus-visible {
+  outline: none;
+  color: var(--panel-ink-hi);
+}
+
+.shortcuts dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin-top: 8px;
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.shortcuts dt { color: #6e7480; }
+.shortcuts dd { color: #8d93a1; }
+
+/* ------------------------------------------------------------------
+   Canvas section — paper and grid.
+
+   These controls borrow the console's rules rather than inventing their
+   own: light from the upper left, small tonal steps between surfaces, and
+   structure kept neutral so the only saturated thing on screen stays the
+   colour you are drawing with. Every choice is a picture of its result —
+   the paper presets are real grain tiles and the pattern tiles are real
+   lattices — so selection is shown by seating a swatch into the panel
+   rather than by ringing it in blue.
+------------------------------------------------------------------ */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.section-head h2 { margin: 0; }
+
+.swatch-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.pattern-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+}
+
+.swatch,
+.pattern {
+  appearance: none;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+  transition:
+    background var(--panel-quick, 110ms) var(--panel-ease, ease),
+    border-color var(--panel-quick, 110ms) var(--panel-ease, ease),
+    box-shadow var(--panel-quick, 110ms) var(--panel-ease, ease);
+}
+
+.swatch canvas,
+.pattern canvas {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+}
+
+.swatch canvas { aspect-ratio: 1; }
+.pattern canvas { aspect-ratio: 3 / 2; }
+
+.swatch-label,
+.pattern-label {
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: #7c828e;
+  transition: color var(--panel-quick, 110ms) var(--panel-ease, ease);
+}
+
+.swatch:hover,
+.pattern:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.swatch:hover .swatch-label,
+.pattern:hover .pattern-label { color: #b6bcc8; }
+
+/* Selected: the tile drops into a socket cut in the panel. The inset
+   shadow at the top and the light catch at the bottom are the recessed
+   pairing the console uses, so a chosen swatch reads as seated. */
+.swatch.active,
+.pattern.active {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.05);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.swatch.active .swatch-label,
+.pattern.active .pattern-label {
+  color: #eceef3;
+}
+
+.swatch:focus-visible,
+.pattern:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* The clear preset has no paper to render, so its canvas stays empty and
+   the checker is drawn by the button itself. */
+.swatch-transparent canvas {
   background:
-    linear-gradient(45deg, #3a3a42 25%, transparent 25%, transparent 75%, #3a3a42 75%),
-    linear-gradient(45deg, #3a3a42 25%, #26262b 25%, #26262b 75%, #3a3a42 75%);
-  background-size: 10px 10px;
-  background-position: 0 0, 5px 5px;
+    linear-gradient(45deg, #2b2b32 25%, transparent 25%, transparent 75%, #2b2b32 75%),
+    linear-gradient(45deg, #2b2b32 25%, #24242a 25%, #24242a 75%, #2b2b32 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 6px 6px;
 }
 
-.swatch-row button.swatch-custom {
-  background: conic-gradient(#f66, #fc6, #6d6, #6cf, #96f, #f66);
+/* Custom shows its current colour, with a spectrum edge marking it as the
+   one swatch that opens a picker instead of committing a value. */
+.swatch-custom::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: conic-gradient(#e06c6c, #e0b46c, #6cc47f, #6cabe0, #9b6ce0, #e06c6c);
+  box-shadow: 0 0 0 1.5px rgba(10, 11, 14, 0.85);
 }
 
 .hidden-input {
@@ -190,39 +467,161 @@ textarea {
   pointer-events: none;
 }
 
-.grid-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* Pattern row and its adjustments go inert with the grid switched off. */
+.pattern-row.disabled,
+.field-stack.disabled {
+  opacity: 0.32;
+  pointer-events: none;
 }
 
-.grid-controls select { width: 92px; }
+.field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity var(--panel-ease-time, 150ms) var(--panel-ease, ease);
+}
 
-/* Concepts-style circular on/off toggle */
-.circle-toggle {
+/* --- Grid switch ---------------------------------------------------- */
+.switch {
+  appearance: none;
+  flex: none;
+  width: 34px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.7),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background var(--panel-ease-time, 150ms) var(--panel-ease, ease);
+}
+
+.switch span {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 2px;
+  border-radius: 50%;
+  background: #6e7480;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  transition:
+    transform var(--panel-ease-time, 150ms) var(--panel-ease, ease),
+    background var(--panel-ease-time, 150ms) var(--panel-ease, ease);
+}
+
+.switch[aria-pressed="true"] { background: rgba(255, 255, 255, 0.16); }
+.switch[aria-pressed="true"] span {
+  transform: translateX(16px);
+  background: #eceef3;
+}
+
+.switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* --- Strength slider ------------------------------------------------- */
+#panel input[type="range"] {
+  appearance: none;
+  width: 112px;
+  height: 18px;
+  background: none;
+  cursor: pointer;
+}
+
+#panel input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6),
+              inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+
+#panel input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+#panel input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #c9ced9;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+#panel input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: #c9ced9;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+#panel input[type="range"]:focus-visible { outline: none; }
+#panel input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* --- Grid colour ------------------------------------------------------ */
+.color-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip {
+  appearance: none;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #8d93a1;
+  font: 500 10.5px/1 inherit;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition:
+    background var(--panel-quick, 110ms) var(--panel-ease, ease),
+    color var(--panel-quick, 110ms) var(--panel-ease, ease);
+}
+
+.chip:hover { background: rgba(255, 255, 255, 0.09); color: #c9ced9; }
+
+.chip.active {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.05);
+  color: #eceef3;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.6),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.color-chip {
   appearance: none;
   width: 22px;
   height: 22px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  background: transparent;
-  cursor: pointer;
   padding: 0;
-  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
 }
 
-.circle-toggle:hover { border-color: rgba(255, 255, 255, 0.55); }
+.color-chip::-webkit-color-swatch-wrapper { padding: 2px; }
+.color-chip::-webkit-color-swatch { border: none; border-radius: 3px; }
+.color-chip::-moz-color-swatch { border: none; border-radius: 3px; }
 
-.circle-toggle[aria-pressed="true"] {
-  border-color: #9cc8ff;
-}
-
-.circle-toggle[aria-pressed="true"]::after {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: #5aa0ff;
+.chip:focus-visible,
+.color-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
 }
 
 /* ------------------------------------------------------------------

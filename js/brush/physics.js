@@ -23,6 +23,10 @@ const DENSIFY_STEP = 2;
 // Closest two stamps ever get, in device px. Below this the cost climbs with
 // no visible gain.
 const MIN_STEP = 0.75;
+// Contour resolution for a fill, in device px. Its nodes are polygon vertices
+// rather than stamps, so they answer to the edge staying smooth and to
+// nothing else.
+const FILL_STEP = 1.5;
 
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
@@ -261,6 +265,9 @@ export function buildNodes(pts, preset, { baseWidth, closed = false, exact = fal
   }
 
   function stepFor(p) {
+    // A fill traces a contour instead of laying down a tip, so its spacing is
+    // a resolution choice and must not follow a width it never uses.
+    if (preset.tip === "fill") return FILL_STEP;
     const w = dynWidth(p, preset, baseWidth);
     // Filled tips only need enough nodes to keep the outline smooth; stamped
     // tips need the preset's spacing or the trail breaks up. The floor stops

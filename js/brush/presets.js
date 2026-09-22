@@ -11,6 +11,7 @@
 export const TIP_ROUND = "round";    // stamped sprite, soft or hard
 export const TIP_RIBBON = "ribbon";  // filled variable-width outline
 export const TIP_NIB = "nib";        // filled outline swept along a fixed nib axis
+export const TIP_FILL = "fill";      // no tip: the path's enclosed area is inked
 
 const DEG = Math.PI / 180;
 
@@ -32,7 +33,8 @@ const DEG = Math.PI / 180;
  *  edgeNoise    deterministic rim irregularity baked into the tip sprite
  *  nib          nib geometry (TIP_NIB only): axis angle, narrowest fraction,
  *               low-speed ink pooling, width gain at direction changes
- *  swatch       width/alpha/dash used only by the wheel's SVG previews
+ *  swatch       width/alpha/dash used only by the wheel's SVG previews, plus
+ *               `filled` for mediums the preview has to show as an area
  */
 export const BRUSH_PRESETS = [
   {
@@ -144,6 +146,34 @@ export const BRUSH_PRESETS = [
     nib: null,
     swatch: { widthMul: 1.9, alphaMul: 0.42, dash: null },
   },
+  {
+    id: "fill",
+    label: "Fill",
+    // The odd one out: this does not lay down a line at all. The path is read
+    // as the edge of a shape and the area it encloses is inked, so a stroke
+    // that crosses itself turns the re-enclosed part into a hole, and
+    // crossing back over it a third time fills it in again.
+    tip: TIP_FILL,
+    sizeMul: 1.0,
+    alphaMul: 1.0,
+    spacing: 0.1,
+    hardness: 1,
+    buildup: 0,
+    // Enough to polish the contour while drawing. High smoothing pulls the
+    // path toward the straight line between its ends, and a shape with no
+    // area left is a shape you cannot see.
+    smoothing: 0.18,
+    // Width and pressure both describe a tip, and this has none: the area
+    // comes from where the hand went, so every node stays nominal.
+    width: { min: 1, gamma: 1 },
+    alpha: { min: 1, gamma: 1 },
+    vel: { width: 0, alpha: 0, texture: 0 },
+    taper: { in: 0, out: 0, minScale: 1 },
+    grain: null,
+    edgeNoise: 0,
+    nib: null,
+    swatch: { widthMul: 1, alphaMul: 1, dash: null, filled: true },
+  },
 ];
 
 /** Ids used by earlier versions, mapped to their closest current preset. */
@@ -152,4 +182,9 @@ const LEGACY_IDS = { chalk: "soft" };
 export function getBrushPreset(id) {
   const key = LEGACY_IDS[id] || id;
   return BRUSH_PRESETS.find((p) => p.id === key) || BRUSH_PRESETS[1];
+}
+
+/** True when a medium inks the area its path encloses rather than the path. */
+export function isFilledMedium(id) {
+  return getBrushPreset(id).tip === TIP_FILL;
 }
