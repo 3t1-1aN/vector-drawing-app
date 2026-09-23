@@ -74,6 +74,19 @@ const interaction = {
   lastY: 0,
 };
 
+// Finger contacts on the canvas. A finger never draws: one pans, two pinch-zoom.
+const touches = new Map();
+let pinchDist = 0;
+// View at the moment a finger first lands. A palm often arrives a few
+// milliseconds before the nib; if the pen follows immediately, that twitch
+// is put back so the stroke starts where the page was.
+let touchSnapshot = null;
+let touchGestureAt = 0;
+// Mouse/space pan, kept separate so a palm cannot steer a stylus stroke.
+let navPointerId = null;
+// The pen or mouse pointer currently driving the active tool.
+let toolPointerId = null;
+
 let activeTool = "line";
 
 // Counters for panX/zoom/cache occupancy. Useful while working on the
@@ -189,50 +202,181 @@ function isPanGesture(event) {
   return false;
 }
 
+function isFinger(event) {
+  return event.pointerType === "touch";
+}
+
+function endNavigation() {
+  interaction.panning = false;
+  pinchDist = 0;
+  canvas.classList.remove("panning");
+}
+
+function capturePointer(event) {
+  try {
+    canvas.setPointerCapture(event.pointerId);
+  } catch {
+    // Capture fails if the pointer already ended. The gesture still tracks.
+  }
+}
+
+// Re-anchor after a finger lands or lifts so the next move does not jump.
+function rebaseTouchNavigation() {
+  const pts = [...touches.values()];
+  if (pts.length === 0) {
+    endNavigation();
+    return;
+  }
+  interaction.panning = true;
+  canvas.classList.add("panning");
+  if (pts.length === 1) {
+    interaction.lastX = pts[0].x;
+    interaction.lastY = pts[0].y;
+    pinchDist = 0;
+    return;
+  }
+  const a = pts[0];
+  const b = pts[1];
+  interaction.lastX = (a.x + b.x) / 2;
+  interaction.lastY = (a.y + b.y) / 2;
+  pinchDist = Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function applyTouchNavigation() {
+  const pts = [...touches.values()];
+  if (pts.length === 1) {
+    panBy(pts[0].x - interaction.lastX, pts[0].y - interaction.lastY);
+    interaction.lastX = pts[0].x;
+    interaction.lastY = pts[0].y;
+    return;
+  }
+  if (pts.length < 2) return;
+  const a = pts[0];
+  const b = pts[1];
+  const midX = (a.x + b.x) / 2;
+  const midY = (a.y + b.y) / 2;
+  const dist = Math.hypot(b.x - a.x, b.y - a.y);
+  panBy(midX - interaction.lastX, midY - interaction.lastY);
+  if (pinchDist > 8 && dist > 8) zoomAt(midX, midY, dist / pinchDist);
+  interaction.lastX = midX;
+  interaction.lastY = midY;
+  pinchDist = dist;
+}
+
+let touchEndedAt = 0;
+
+function dropTouch(pointerId) {
+  if (!touches.delete(pointerId)) return false;
+  if (touches.size === 0) {
+    const snapshot = touchSnapshot;
+    touchEndedAt = performance.now();
+    setTimeout(() => {
+      if (touchSnapshot === snapshot) touchSnapshot = null;
+    }, 160);
+  }
+  rebaseTouchNavigation();
+  return true;
+}
+
+function rememberTouchOrigin() {
+  if (touchSnapshot) return;
+  touchSnapshot = { panX: view.panX, panY: view.panY, zoom: view.zoom };
+  touchGestureAt = performance.now();
+}
+
+function revertAccidentalPan() {
+  if (!touchSnapshot) return;
+  const age = performance.now() - touchGestureAt;
+  const palmStillDown = touches.size > 0;
+  const palmJustLifted = performance.now() - touchEndedAt < 40;
+  if (age < 140 && (palmStillDown || palmJustLifted)) {
+    view.panX = touchSnapshot.panX;
+    view.panY = touchSnapshot.panY;
+    view.zoom = touchSnapshot.zoom;
+  }
+  touchSnapshot = null;
+}
+
 // Pointer events rather than mouse events, because stylus pressure and
 // getCoalescedEvents() only exist here — see brush/input.js.
 //
-// Note that no handler in this path calls preventDefault() on pointerdown:
-// doing so suppresses the compatibility mouse events, which would take out
-// dblclick-to-measure and the wheel's press-outside dismissal. Text selection
-// is blocked in CSS instead, and pointer capture keeps a drag alive without
-// needing the default cancelled.
+// Fingers navigate. A pen or mouse uses the active tool. isPrimary is not
+// consulted: on a tablet the stylus stops being primary the moment a palm
+// or finger lands first, which would otherwise swallow the stroke.
+//
+// preventDefault() is limited to finger pointerdown. Calling it on a pen
+// or mouse down suppresses the compatibility mouse events dblclick-to-measure
+// needs. Text selection is blocked in CSS.
 canvas.addEventListener("pointerdown", (event) => {
-  if (!event.isPrimary) return;
+  if (isFinger(event)) {
+    // A resting palm must not pan the page out from under a stroke.
+    if (toolPointerId !== null || navPointerId !== null) return;
+    event.preventDefault();
+    rememberTouchOrigin();
+    touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    capturePointer(event);
+    rebaseTouchNavigation();
+    return;
+  }
+
+  // The stylus takes the canvas. Drop any finger navigation already in flight.
+  if (event.pointerType === "pen" && (touches.size || touchSnapshot)) {
+    revertAccidentalPan();
+    touches.clear();
+    endNavigation();
+  }
+
   // Pan is global (works regardless of active tool).
   if (isPanGesture(event)) {
+    navPointerId = event.pointerId;
     interaction.panning = true;
     interaction.lastX = event.clientX;
     interaction.lastY = event.clientY;
     canvas.classList.add("panning");
-    canvas.setPointerCapture(event.pointerId);
+    capturePointer(event);
     return;
   }
   // While the color eyedropper is sampling, don't start a stroke.
   if (isEyedropperActive()) return;
-  canvas.setPointerCapture(event.pointerId);
+  toolPointerId = event.pointerId;
+  capturePointer(event);
   const tool = getTool(activeTool);
   if (tool && tool.onPointerDown) tool.onPointerDown(app, event);
 });
 
 window.addEventListener("pointermove", (event) => {
-  if (interaction.panning) {
+  if (touches.has(event.pointerId)) {
+    if (toolPointerId !== null) {
+      dropTouch(event.pointerId);
+      return;
+    }
+    touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    applyTouchNavigation();
+    return;
+  }
+  if (navPointerId === event.pointerId) {
     panBy(event.clientX - interaction.lastX, event.clientY - interaction.lastY);
     interaction.lastX = event.clientX;
     interaction.lastY = event.clientY;
     return;
   }
+  // Fingers never draw, and a second pointer must not extend a stroke.
+  if (isFinger(event)) return;
+  if (toolPointerId !== null && event.pointerId !== toolPointerId) return;
   if (isEyedropperActive()) return;
   const tool = getTool(activeTool);
   if (tool && tool.onPointerMove) tool.onPointerMove(app, event);
 });
 
 window.addEventListener("pointerup", (event) => {
-  if (interaction.panning) {
-    interaction.panning = false;
-    canvas.classList.remove("panning");
+  if (dropTouch(event.pointerId)) return;
+  if (navPointerId === event.pointerId) {
+    navPointerId = null;
+    endNavigation();
     return;
   }
+  if (toolPointerId !== event.pointerId) return;
+  toolPointerId = null;
   // The eyedropper consumes its own release; don't also finish a stroke.
   if (isEyedropperActive()) return;
   const tool = getTool(activeTool);
@@ -240,11 +384,17 @@ window.addEventListener("pointerup", (event) => {
 });
 
 // A cancelled pointer means the gesture was invalidated (palm rejection, a
-// system gesture taking over), so the in-progress stroke is discarded rather
-// than committed. Every tool's onDeactivate drops its transient state.
-window.addEventListener("pointercancel", () => {
-  interaction.panning = false;
-  canvas.classList.remove("panning");
+// system gesture taking over). Only the pointer that was drawing is
+// discarded; a cancelled finger must not throw away the stylus stroke.
+window.addEventListener("pointercancel", (event) => {
+  if (dropTouch(event.pointerId)) return;
+  if (navPointerId === event.pointerId) {
+    navPointerId = null;
+    endNavigation();
+    return;
+  }
+  if (toolPointerId !== event.pointerId) return;
+  toolPointerId = null;
   const tool = getTool(activeTool);
   if (tool && tool.onDeactivate) tool.onDeactivate(app);
 });
