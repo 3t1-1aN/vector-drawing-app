@@ -3,6 +3,7 @@
 // element type and apply typed real-world values back to geometry.
 
 import { getRectCorners, lineLength, rectSize, transformElement } from "../scene/element.js";
+import { touchElement } from "../render/ink-rev.js";
 import { worldToReal, realToWorld } from "./scale.js";
 import { edgeLengths } from "./recognize.js";
 
@@ -64,6 +65,7 @@ export function applyMeasurements(el, values) {
       applyTriangleSide(el, values);
       break;
   }
+  touchElement(el);
 }
 
 function setLineLength(el, worldLen) {

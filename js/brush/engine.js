@@ -19,7 +19,7 @@
 
 import { TIP_FILL, TIP_NIB, TIP_RIBBON, TIP_ROUND } from "./presets.js";
 import { buildNodes } from "./physics.js";
-import { getPaperTile, getTipSprites, hashNoise, PAPER_TILE_PX, spriteFor } from "./tips.js";
+import { getPaperTile, getTipSprites, hashNoise, paperToothPeriod, spriteFor } from "./tips.js";
 
 // Scratch mask, grown as needed and reused so a stroke does not allocate.
 let mask = null;
@@ -279,8 +279,10 @@ function applyGrain(ctx, preset, rect, originX, originY, scale, meanSpeed) {
   const pattern = ctx.createPattern(getPaperTile(), "repeat");
   if (!pattern) return;
 
-  const tileScale = grain.scale * Math.max(0.35, Math.min(3, scale));
-  const period = PAPER_TILE_PX * tileScale;
+  // One tooth texel is one world pixel, then brought into mask pixels so the
+  // fibers sit on the same places as the sheet.
+  const tileScale = scale;
+  const period = paperToothPeriod() * tileScale;
   const offX = -(((originX * scale) % period) + period) % period;
   const offY = -(((originY * scale) % period) + period) % period;
   if (typeof DOMMatrix === "function" && pattern.setTransform) {

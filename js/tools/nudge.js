@@ -11,7 +11,9 @@
 
 import { screenToWorld } from "../core/view.js";
 import { bakeToPath, cloneElement, createIdElement } from "../scene/element.js";
+import { touchElement } from "../render/ink-rev.js";
 import { TransformCommand } from "../scene/scene.js";
+import { onSceneMutated } from "../math/pipeline.js";
 
 const PICK_TOLERANCE_PX = 10;
 const FALLOFF_WORLD = 60; // influence radius in world units
@@ -30,6 +32,13 @@ function nearestSegmentIndex(points, world) {
     if (d < bestD) { bestD = d; best = i; }
   }
   return { index: best, dist: bestD };
+}
+
+function mixSample(a, b, t) {
+  if (a == null && b == null) return undefined;
+  const av = a ?? b;
+  const bv = b ?? av;
+  return av + (bv - av) * t;
 }
 
 function distToSegment(p, a, b) {
@@ -67,8 +76,14 @@ export const nudgeTool = {
     const len2 = dx * dx + dy * dy;
     let t = len2 === 0 ? 0 : ((world.x - a.x) * dx + (world.y - a.y) * dy) / len2;
     t = Math.max(0, Math.min(1, t));
-    const grab = { x: a.x + t * dx, y: a.y + t * dy };
+    const grab = {
+      x: a.x + t * dx,
+      y: a.y + t * dy,
+      p: mixSample(a.p, b.p, t),
+      v: mixSample(a.v, b.v, t),
+    };
     pts.splice(index + 1, 0, grab);
+    touchElement(hit);
 
     state.el = hit;
     state.grabIndex = index + 1;
@@ -87,13 +102,14 @@ export const nudgeTool = {
     // Move the grab point fully; falloff other points by distance.
     for (let i = 0; i < pts.length; i++) {
       if (i === state.grabIndex) {
-        pts[i] = { x: world.x, y: world.y };
+        pts[i] = { ...pts[i], x: world.x, y: world.y };
         continue;
       }
       const d = Math.hypot(pts[i].x - grab.x, pts[i].y - grab.y);
       const w = Math.max(0, 1 - d / FALLOFF_WORLD);
-      pts[i] = { x: pts[i].x + dx * w, y: pts[i].y + dy * w };
+      pts[i] = { ...pts[i], x: pts[i].x + dx * w, y: pts[i].y + dy * w };
     }
+    touchElement(state.el);
   },
 
   onPointerUp(app, event) {
@@ -101,6 +117,7 @@ export const nudgeTool = {
     const cmd = new TransformCommand();
     cmd.records.push({ id: state.el.id, before: state.snapshot, after: cloneElement(state.el) });
     app.history.push(cmd);
+    onSceneMutated(app);
     state.el = null;
     state.snapshot = null;
     state.active = false;

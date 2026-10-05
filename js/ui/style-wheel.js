@@ -32,6 +32,7 @@
 import { activeBrush, setBrush, subscribeStyle } from "../brush/active-brush.js";
 import { BRUSH_PRESETS, getBrushPreset, isFilledMedium } from "../brush/presets.js";
 import { StyleCommand } from "../scene/scene.js";
+import { touchElement } from "../render/ink-rev.js";
 import {
   initColorPicker, openColorPicker, closeColorPicker, isColorPickerOpen,
   setColorSampler, isEyedropperActive, stopEyedropper,
@@ -133,6 +134,7 @@ let appRef = null;
 let dragging = null;     // "size" | "opacity" | "smoothing" | "move" | null
 let pressCandidate = null; // pending press that may become a drag or a click
 let moveOffset = { x: 0, y: 0 };
+let movePointerId = null;  // finger or pen that is dragging the wheel
 let pendingStyleCmd = null;
 let openPopoverKind = null; // "medium" | "size" | "opacity" | "smoothing" | null
 let popoverPinned = false;  // true after a click; hover-peek leaves it transient
@@ -283,8 +285,10 @@ function beginStyleEdit() {
 
 function applyStylePatch(patch) {
   const el = singleSelection();
-  if (el) Object.assign(el.style, patch);
-  else setBrush(patch);
+  if (el) {
+    Object.assign(el.style, patch);
+    touchElement(el);
+  } else setBrush(patch);
 }
 
 function commitStyleEdit() {
@@ -782,16 +786,29 @@ function buildDom() {
   document.body.appendChild(root);
   restorePosition();
 
-  // Reposition drag on the tool band.
-  toolRing.querySelector(".sw-band").addEventListener("mousedown", (e) => {
+  // Reposition drag on the tool band. Pointer events so a finger or a pen
+  // can move the wheel; a mouse still arrives as a pointer too.
+  const band = toolRing.querySelector(".sw-band");
+  band.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
     dragging = "move";
+    movePointerId = e.pointerId;
     const rect = root.getBoundingClientRect();
     moveOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     closePopover();
     hideTooltip();
+    root.classList.add("dragging");
     e.preventDefault();
     e.stopPropagation();
+    try { band.setPointerCapture(e.pointerId); } catch { /* already released */ }
   });
+
+  window.addEventListener("pointermove", (e) => {
+    if (movePointerId === null || e.pointerId !== movePointerId) return;
+    onWindowMouseMove(e);
+  });
+  window.addEventListener("pointerup", endWheelMove);
+  window.addEventListener("pointercancel", endWheelMove);
 
   window.addEventListener("mousemove", onWindowMouseMove);
   window.addEventListener("mouseup", onWindowMouseUp);
@@ -863,6 +880,12 @@ function onWindowMouseMove(e) {
   } else {
     updatePropFromPointer(e);
   }
+}
+
+function endWheelMove(e) {
+  if (movePointerId === null || e.pointerId !== movePointerId) return;
+  movePointerId = null;
+  onWindowMouseUp();
 }
 
 function onWindowMouseUp() {

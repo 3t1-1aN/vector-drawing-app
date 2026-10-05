@@ -11,10 +11,11 @@
 //   square:   { id, type:'square', corners:[4], w, h, side, style }
 //   circle:   { id, type:'circle', cx, cy, r, style }
 //   triangle: { id, type:'triangle', corners:[3], sides:[3], style }
-//   path:     { id, type:'path',   points:[{x,y}], style }
+//   path:     { id, type:'path',   points:[{x,y,p,v}], style }
 
 import { brushToStyle } from "../brush/active-brush.js";
 import { isFilledMedium } from "../brush/presets.js";
+import { touchElement } from "../render/ink-rev.js";
 
 let _idCounter = 1;
 export function nextId() {
@@ -223,26 +224,33 @@ export function intersectsBounds(el, bounds) {
 // Transforms — mutate element geometry in place.
 // ------------------------------------------------------------------
 
+/** Keep pressure and speed when a point moves. Dropping them flattens the brush. */
+function offsetPoint(p, dx, dy) {
+  return { ...p, x: p.x + dx, y: p.y + dy };
+}
+
 /** Translate an element by (dx, dy) in world units. */
 export function translateElement(el, dx, dy) {
+  if (dx === 0 && dy === 0) return;
   switch (el.type) {
     case "line":
     case "rect":
       el.startX += dx; el.startY += dy;
       el.endX += dx; el.endY += dy;
-      if (el.corners) el.corners = el.corners.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      if (el.corners) el.corners = el.corners.map((p) => offsetPoint(p, dx, dy));
       break;
     case "circle":
       el.cx += dx; el.cy += dy;
       break;
     case "square":
     case "triangle":
-      el.corners = el.corners.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      el.corners = el.corners.map((p) => offsetPoint(p, dx, dy));
       break;
     case "path":
-      el.points = el.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      el.points = el.points.map((p) => offsetPoint(p, dx, dy));
       break;
   }
+  touchElement(el);
 }
 
 /**
@@ -285,6 +293,7 @@ export function bakeToPath(el) {
   });
   el.type = "path";
   el.points = points;
+  touchElement(el);
   return el;
 }
 
@@ -293,6 +302,7 @@ function transformPoint(p, ox, oy, cosA, sinA, fx, fy) {
   const tx = (p.x - ox) * fx;
   const ty = (p.y - oy) * fy;
   return {
+    ...p,
     x: ox + tx * cosA - ty * sinA,
     y: oy + tx * sinA + ty * cosA,
   };
@@ -359,6 +369,7 @@ export function transformElement(el, ox, oy, fx, fy, angle = 0) {
     el.w = Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y);
     el.h = Math.hypot(c[3].x - c[0].x, c[3].y - c[0].y);
   }
+  touchElement(el);
 }
 
 /** True when an element is too small to commit (filters bare clicks). */

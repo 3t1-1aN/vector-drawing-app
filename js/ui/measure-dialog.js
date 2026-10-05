@@ -4,8 +4,9 @@
 
 import { getEditableFields, applyMeasurements } from "../precision/measure-edit.js";
 import { unitLabel } from "../precision/scale.js";
-import { cloneElement } from "../scene/element.js";
+import { cloneElement, getBounds } from "../scene/element.js";
 import { TransformCommand } from "../scene/scene.js";
+import { placeFloatDialog, screenAvoid } from "./float-dialog.js";
 
 let dialog = null;
 let fieldsEl = null;
@@ -24,6 +25,7 @@ function ensureDom() {
     e.preventDefault();
     submit();
   });
+  form.addEventListener("input", () => clearMeasureError());
   cancelBtn.addEventListener("click", () => closeMeasureDialog());
   dialog.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.preventDefault(); closeMeasureDialog(); }
@@ -40,7 +42,11 @@ export function openMeasureDialog(app, el, sx, sy) {
   if (!fields || fields.length === 0) return false;
 
   app.scene.select(el.id);
-  titleEl.textContent = `Edit ${el.type}`;
+  const titles = {
+    line: "Line", rect: "Rectangle", square: "Square",
+    circle: "Circle", triangle: "Triangle",
+  };
+  titleEl.textContent = titles[el.type] || "Measurement";
   fieldsEl.innerHTML = "";
   const unit = unitLabel();
 
@@ -67,18 +73,8 @@ export function openMeasureDialog(app, el, sx, sy) {
     fieldsEl.appendChild(row);
   }
 
-  // Position near cursor, clamped inside the viewport.
-  dialog.classList.remove("hidden");
-  const pad = 12;
-  const rect = dialog.getBoundingClientRect();
-  let left = sx + 12;
-  let top = sy + 12;
-  if (left + rect.width > window.innerWidth - pad) left = sx - rect.width - 12;
-  if (top + rect.height > window.innerHeight - pad) top = sy - rect.height - 12;
-  left = Math.max(pad, left);
-  top = Math.max(pad, top);
-  dialog.style.left = `${left}px`;
-  dialog.style.top = `${top}px`;
+  clearMeasureError();
+  placeFloatDialog(dialog, sx, sy, screenAvoid(getBounds(el)));
 
   const firstInput = fieldsEl.querySelector("input");
   if (firstInput) {
@@ -98,10 +94,22 @@ function submit() {
   if (!el || !app) { closeMeasureDialog(); return; }
 
   const values = {};
+  let invalid = false;
   for (const input of fieldsEl.querySelectorAll("input")) {
     const v = parseFloat(input.value);
-    if (!Number.isFinite(v) || v <= 0) return;
-    values[input.name] = v;
+    if (!Number.isFinite(v) || v <= 0) {
+      input.setAttribute("aria-invalid", "true");
+      invalid = true;
+    } else {
+      input.removeAttribute("aria-invalid");
+      values[input.name] = v;
+    }
+  }
+  if (invalid) {
+    const note = document.getElementById("measureError");
+    note.hidden = false;
+    note.textContent = "Enter a length greater than zero.";
+    return;
   }
 
   const before = cloneElement(el);
@@ -113,6 +121,15 @@ function submit() {
   app.history.push(cmd);
 
   closeMeasureDialog();
+}
+
+function clearMeasureError() {
+  const note = document.getElementById("measureError");
+  if (note) note.hidden = true;
+  if (!fieldsEl) return;
+  for (const input of fieldsEl.querySelectorAll("input")) {
+    input.removeAttribute("aria-invalid");
+  }
 }
 
 export function closeMeasureDialog() {

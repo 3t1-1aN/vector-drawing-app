@@ -9,6 +9,7 @@ import { samplesFrom } from "../brush/input.js";
 import { brushRadiusWorld } from "./erase.js";
 import { hitTest } from "../scene/element.js";
 import { RemoveElementsCommand } from "../scene/scene.js";
+import { onSceneMutated } from "../math/pipeline.js";
 
 const state = {
   active: false,
@@ -109,6 +110,7 @@ export const sliceTool = {
     if (doomed.length === 0) return;
     app.history.push(new RemoveElementsCommand(doomed));
     for (const el of doomed) app.scene.remove(el.id);
+    onSceneMutated(app);
   },
 
   /** The swipe being drawn, shown until the button comes up. */

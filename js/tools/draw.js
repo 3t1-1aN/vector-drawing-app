@@ -13,6 +13,7 @@ import { activeBrush } from "../brush/active-brush.js";
 import { getBrushPreset } from "../brush/presets.js";
 import { PressureTracker } from "../brush/physics.js";
 import { samplesFrom } from "../brush/input.js";
+import { onStrokeCommitted } from "../math/pipeline.js";
 
 const HOLD_MOVE_THRESHOLD_PX = 5;
 const HOLD_TRIGGER_MS = 700;
@@ -114,6 +115,7 @@ function commit(app) {
     app.scene.add(el);
     app.history.push(new AddElementCommand(el));
     app.scene.clearSelection();
+    if (el.type === "path") onStrokeCommitted(app, el);
   }
   shared.element = null;
   shared.tracker = null;

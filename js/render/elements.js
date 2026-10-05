@@ -53,21 +53,29 @@ export function traceElement(ctx, el) {
 }
 
 /**
- * Draw all committed elements, then the live preview (if any), then the
- * selected-element highlight. `preview` is { element, recognized } | null.
- * `doomed` is a set of ids the slice swipe has claimed; those draw greyed
- * out so the whole object, not the crossed bit, reads as about to go.
+ * Draw committed elements, then the live preview. The stage itself does not
+ * use this — it composites committed ink once and only calls
+ * `drawLivePreview` — but the eyedropper replays the scene onto its own
+ * canvas and needs the full pass.
+ *
+ * `preview` is { element, recognized } | null. `doomed` is a set of ids the
+ * slice swipe has claimed; those draw greyed out so the whole object, not
+ * the crossed bit, reads as about to go.
  */
 export function drawScene(ctx, scene, view, preview, doomed) {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   beginBrushFrame();
+  drawCommitted(ctx, scene, view, doomed);
+  drawLivePreview(ctx, view, preview);
+}
 
+/** Committed elements, each with its own brush. World transform must be set. */
+export function drawCommitted(ctx, scene, view, doomed) {
   // Off-screen strokes cost nothing to skip and would otherwise each take a
   // rasterise slot on the way back into view.
   const visible = getVisibleWorldBounds();
 
-  // Committed elements — each rendered with its own brush preset.
   for (const el of scene.elements) {
     const selected = scene.isSelected(el.id);
     const claimed = doomed && doomed.has(el.id);
@@ -95,25 +103,28 @@ export function drawScene(ctx, scene, view, preview, doomed) {
   }
   ctx.globalAlpha = 1;
   ctx.setLineDash([]);
+}
 
-  // Live preview: drawn with the element's own medium so it is WYSIWYG;
-  // recognized shapes flash green until committed.
-  if (preview && preview.element) {
-    if (preview.recognized) {
-      ctx.strokeStyle = recognizedColor();
-      ctx.lineWidth = (preview.element.style?.strokeWidth || 2) / view.zoom;
-      ctx.globalAlpha = 0.9;
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      traceElement(ctx, preview.element);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    } else {
-      // The in-flight stroke changes every frame, so it renders straight
-      // through rather than churning a cache entry per frame.
-      drawBrushElement(ctx, preview.element, view, { alphaScale: 0.9, cache: false });
-    }
+/**
+ * The in-flight stroke. Kept off the committed-ink bitmap because it changes
+ * every pointer sample.
+ */
+export function drawLivePreview(ctx, view, preview) {
+  if (!preview || !preview.element) return;
+  if (preview.recognized) {
+    ctx.strokeStyle = recognizedColor();
+    ctx.lineWidth = (preview.element.style?.strokeWidth || 2) / view.zoom;
+    ctx.globalAlpha = 0.9;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    traceElement(ctx, preview.element);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    return;
   }
+  // The in-flight stroke changes every frame, so it renders straight
+  // through rather than churning a cache entry per frame.
+  drawBrushElement(ctx, preview.element, view, { alphaScale: 0.9, cache: false });
 }
 
 /** Bounding-box overlap test, padded for the widest the brush can spread. */

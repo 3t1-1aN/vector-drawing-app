@@ -8,10 +8,11 @@ import { view } from "../core/view.js";
 import { appearance } from "../workspace/appearance.js";
 import { workspace, setWorkspaceMode } from "../workspace/mode.js";
 import { activeBrush } from "../brush/active-brush.js";
+import { touchScene } from "../render/ink-rev.js";
 
 const FORMAT_VERSION = 2;
 
-export function serializeProject(scene) {
+export function serializeProject(scene, extras = {}) {
   return {
     format: "vda",
     version: FORMAT_VERSION,
@@ -22,6 +23,7 @@ export function serializeProject(scene) {
     brush: { ...activeBrush },
     artboards: scene.artboards.map((a) => ({ ...a })),
     elements: scene.elements.map((el) => cloneElement(el)),
+    ...extras,
   };
 }
 
@@ -49,6 +51,7 @@ export function deserializeProject(data, scene) {
   scene.artboards = (data.artboards || []).map((a) => ({ ...a }));
   scene.elements = (data.elements || []).map((el) => createIdElement(el.type, stripId(el)));
   scene.clearSelection();
+  touchScene();
 }
 
 // Re-hydrate an element from saved data without letting it keep a stale id

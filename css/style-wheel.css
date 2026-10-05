@@ -103,6 +103,7 @@
   stroke: transparent;
   fill: none;
   pointer-events: all;
+  touch-action: none;
   cursor: grab;
 }
 

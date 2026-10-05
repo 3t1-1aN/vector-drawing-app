@@ -9,6 +9,7 @@ import {
   intersectsBounds,
   getBounds,
 } from "./element.js";
+import { touchElement, touchScene } from "../render/ink-rev.js";
 
 export class Scene {
   constructor() {
@@ -30,6 +31,7 @@ export class Scene {
 
   add(el) {
     this.elements.push(el);
+    touchScene();
     return el;
   }
 
@@ -37,6 +39,7 @@ export class Scene {
     const i = this.elements.findIndex((e) => e.id === id);
     if (i !== -1) this.elements.splice(i, 1);
     this.selected.delete(id);
+    if (i !== -1) touchScene();
   }
 
   // --- Selection --------------------------------------------------
@@ -202,7 +205,10 @@ export class TransformCommand {
     for (const r of this.records) {
       if (!r.after) continue;
       const el = scene.getById(r.id);
-      if (el) Object.assign(el, cloneElement(r.after));
+      if (el) {
+        Object.assign(el, cloneElement(r.after));
+        touchElement(el);
+      }
     }
   }
 
@@ -210,7 +216,10 @@ export class TransformCommand {
     for (const r of this.records) {
       if (!r.before) continue;
       const el = scene.getById(r.id);
-      if (el) Object.assign(el, cloneElement(r.before));
+      if (el) {
+        Object.assign(el, cloneElement(r.before));
+        touchElement(el);
+      }
     }
   }
 }
@@ -250,14 +259,20 @@ export class StyleCommand {
     for (const r of this.records) {
       if (!r.after) continue;
       const el = scene.getById(r.id);
-      if (el) el.style = { ...r.after };
+      if (el) {
+        el.style = { ...r.after };
+        touchElement(el);
+      }
     }
   }
 
   undo(scene) {
     for (const r of this.records) {
       const el = scene.getById(r.id);
-      if (el) el.style = { ...r.before };
+      if (el) {
+        el.style = { ...r.before };
+        touchElement(el);
+      }
     }
   }
 }

@@ -18,6 +18,7 @@
 import { getRectCorners } from "../scene/element.js";
 import { getBrushPreset, TIP_FILL } from "./presets.js";
 import { maxTipRadius, rasterizeStroke } from "./engine.js";
+import { elementRev } from "../render/ink-rev.js";
 
 // Rasterises allowed per frame once an entry already exists. A brand new
 // stroke always renders immediately -- it has nothing stale to fall back on.
@@ -197,14 +198,28 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
   const preset = getBrushPreset(st.medium || "pen");
   const dpr = window.devicePixelRatio || 1;
   const scale = view.zoom * dpr;
+  const alpha = Math.max(0, Math.min(1, (st.opacity ?? 1) * preset.alphaMul * alphaScale));
+  if (alpha <= 0.002) return;
+
+  // Unchanged stroke at this zoom: the bitmap is already right. Skip the
+  // polyline, the signature, and the layout. A page of drawings then costs
+  // one blit per stroke on a rebuild, and nothing at all when the ink layer
+  // is reused.
+  if (cache) {
+    const elRev = elementRev(el);
+    const hit = entries.get(el.id);
+    if (hit && hit.elRev === elRev && hit.scale === scale && hit.raster) {
+      hit.frame = frame;
+      blit(ctx, hit.raster, hit.box, hit.scale, alpha);
+      return;
+    }
+  }
+
   const { points, closed, exact } = elementPolyline(el);
   if (points.length === 0) return;
 
   const box = layout(el, points, preset, scale, dpr, exact);
   if (!box || box.w <= 0 || box.h <= 0) return;
-
-  const alpha = Math.max(0, Math.min(1, (st.opacity ?? 1) * preset.alphaMul * alphaScale));
-  if (alpha <= 0.002) return;
 
   const strokeOpts = {
     preset,
@@ -229,6 +244,7 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
   let entry = entries.get(el.id);
   if (entry && entry.sig === sig) {
     entry.frame = frame;
+    entry.elRev = elementRev(el);
     blit(ctx, entry.raster, entry.box, scale, alpha);
     return;
   }
@@ -264,6 +280,7 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
                       0, 0, entry.w, entry.h);
   entry.sig = sig;
   entry.scale = scale;
+  entry.elRev = elementRev(el);
   // Where the kept rect lands in world space.
   entry.box = {
     originX: box.originX + raster.x / scale,

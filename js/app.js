@@ -19,7 +19,8 @@ import { drawBackground } from "./render/background.js";
 import { initWorkspacePanel } from "./ui/workspace-panel.js";
 import { isEngineering } from "./workspace/mode.js";
 import { initStyleWheel, styleWheelFrame } from "./ui/style-wheel.js";
-import { drawScene } from "./render/elements.js";
+import { drawLivePreview } from "./render/elements.js";
+import { drawInkLayer, inkLayerStats } from "./render/ink-layer.js";
 import {
   drawCommittedMeasurements, drawMeasurementLabel, drawScaleBar,
 } from "./render/labels.js";
@@ -43,10 +44,19 @@ import { eraserTool } from "./tools/erase.js";
 import { exportSvg, downloadText } from "./io/export-svg.js";
 import { serializeProject, deserializeProject, pickFile, readFileText } from "./io/project.js";
 import { openMeasureDialog, closeMeasureDialog, isOpen as measureDialogOpen } from "./ui/measure-dialog.js";
+import { openMathEditAt, closeMathEdit, isMathEditOpen } from "./ui/math-edit.js";
 import { isEyedropperActive } from "./ui/color-picker.js";
 import { setBrush } from "./brush/active-brush.js";
 import { brushCacheStats } from "./brush/cache.js";
 import { installBrushTestbed } from "./brush/testbed.js";
+import {
+  drawMathLayer,
+  handleMathPointerDown,
+  onSceneMutated,
+  setEnabled as setMathEnabled,
+  serializeMathState,
+  deserializeMathState,
+} from "./math/pipeline.js";
 
 // --- Register tools ----------------------------------------------------
 registerTool("select", selectTool);
@@ -154,7 +164,7 @@ document.getElementById("fitArtboard").addEventListener("click", () => {
 });
 
 document.getElementById("saveProject").addEventListener("click", () => {
-  const data = serializeProject(scene);
+  const data = serializeProject(scene, { math: serializeMathState() });
   downloadText("drawing.vda", JSON.stringify(data, null, 2), "application/json");
 });
 
@@ -162,7 +172,9 @@ document.getElementById("loadProject").addEventListener("click", async () => {
   try {
     const file = await pickFile(".vda,application/json");
     const text = await readFileText(file);
-    deserializeProject(JSON.parse(text), scene);
+    const data = JSON.parse(text);
+    deserializeProject(data, scene);
+    deserializeMathState(data.math, app);
     history.clear();
     syncPanelFromSettings();
   } catch (err) {
@@ -185,11 +197,21 @@ function syncPanelFromSettings() {
 // --- Workspace (background + grid) panel --------------------------------
 const panel = document.getElementById("panel");
 const panelToggle = document.getElementById("panelToggle");
+// A closed panel is only faded out. Without inert, Tab still walks every
+// control inside it, including ones the user cannot see.
+panel.inert = panel.classList.contains("collapsed");
 panelToggle.addEventListener("click", () => {
   const open = panel.classList.toggle("collapsed") === false;
+  panel.inert = !open;
   panelToggle.setAttribute("aria-expanded", String(open));
 });
-const workspacePanel = initWorkspacePanel();
+const workspacePanel = initWorkspacePanel({
+  onChange(detail) {
+    if (detail && "mathAssist" in detail) {
+      setMathEnabled(app, detail.mathAssist);
+    }
+  },
+});
 
 function syncWorkspacePanel() {
   workspacePanel.sync();
@@ -338,6 +360,8 @@ canvas.addEventListener("pointerdown", (event) => {
   }
   // While the color eyedropper is sampling, don't start a stroke.
   if (isEyedropperActive()) return;
+  // Quiet math chips (e.g. Graph) consume the click before tools.
+  if (handleMathPointerDown(app, event)) return;
   toolPointerId = event.pointerId;
   capturePointer(event);
   const tool = getTool(activeTool);
@@ -414,8 +438,12 @@ canvas.addEventListener(
 // rest of the measurement layer into Engineer.
 const PICK_TOLERANCE_PX = 8;
 canvas.addEventListener("dblclick", (event) => {
-  if (!isEngineering()) return;
   if (interaction.spaceDown || interaction.panning) return;
+  if (openMathEditAt(event.clientX, event.clientY)) {
+    event.preventDefault();
+    return;
+  }
+  if (!isEngineering()) return;
   event.preventDefault();
   const world = screenToWorld(event.clientX, event.clientY);
   const tol = PICK_TOLERANCE_PX / view.zoom;
@@ -425,6 +453,25 @@ canvas.addEventListener("dblclick", (event) => {
 });
 
 // --- Keyboard ----------------------------------------------------------
+// Space pans the canvas, and the letter keys switch tools. Both have to
+// leave real controls alone: a focused button needs Space to activate, and
+// a measurement or expression field needs Space, Backspace, and undo.
+function eventTargetElement(event) {
+  return event.target instanceof Element ? event.target : null;
+}
+
+function typingInField(event) {
+  const t = eventTargetElement(event);
+  if (!t) return false;
+  return Boolean(t.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+function onControl(event) {
+  const t = eventTargetElement(event);
+  if (!t) return false;
+  return Boolean(t.closest("button, a, summary, input, textarea, select, [contenteditable='true']"));
+}
+
 const TOOL_KEYS = {
   KeyV: "select", KeyL: "line", KeyR: "rect", KeyC: "circle",
   KeyP: "pen", KeyN: "nudge", KeyS: "slice", KeyE: "eraser",
@@ -436,8 +483,14 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     return;
   }
+  if (isMathEditOpen() && event.code === "Escape") {
+    closeMathEdit();
+    event.preventDefault();
+    return;
+  }
 
   if (event.code === "Space" || event.key === " ") {
+    if (onControl(event)) return;
     if (!interaction.spaceDown) {
       interaction.spaceDown = true;
       canvas.classList.add("pannable");
@@ -445,6 +498,8 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     return;
   }
+
+  if (typingInField(event)) return;
 
   if (event.code === "F2") {
     debugOverlayVisible = !debugOverlayVisible;
@@ -456,11 +511,13 @@ window.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.code === "KeyZ") {
     if (event.shiftKey) history.redo(scene);
     else history.undo(scene);
+    onSceneMutated(app);
     event.preventDefault();
     return;
   }
   if ((event.ctrlKey || event.metaKey) && event.code === "KeyY") {
     history.redo(scene);
+    onSceneMutated(app);
     event.preventDefault();
     return;
   }
@@ -473,6 +530,7 @@ window.addEventListener("keydown", (event) => {
       const sel = scene.getSelected();
       history.push(new RemoveElementsCommand(sel));
       for (const el of sel) scene.remove(el.id);
+      onSceneMutated(app);
       event.preventDefault();
     }
     return;
@@ -494,6 +552,7 @@ window.addEventListener("keydown", (event) => {
       history.push(new AddManyCommand(copies));
       scene.clearSelection();
       for (const c of copies) scene.addToSelection(c.id);
+      onSceneMutated(app);
       event.preventDefault();
     }
     return;
@@ -513,7 +572,7 @@ window.addEventListener("keyup", (event) => {
   if (event.code === "Space" || event.key === " ") {
     interaction.spaceDown = false;
     if (!interaction.panning) canvas.classList.remove("pannable");
-    event.preventDefault();
+    if (!onControl(event)) event.preventDefault();
   }
 });
 
@@ -536,7 +595,7 @@ class AddManyCommand {
 function render() {
   resetToScreenSpace(ctx);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawBackground(ctx);
+  drawBackground(ctx, view);
 
   // World-space scene. Artboards are a drafting construct, so they travel
   // with the rest of the measurement layer rather than with the drawing.
@@ -548,7 +607,8 @@ function render() {
   const preview = tool && tool.getPreview ? tool.getPreview(app) : null;
   const doomed = tool && tool.getDoomed ? tool.getDoomed() : null;
   drawShapeGuides(ctx, view, preview);
-  drawScene(ctx, scene, view, preview, doomed);
+  drawInkLayer(ctx, scene, view, doomed);
+  drawLivePreview(ctx, view, preview);
 
   // Screen-space overlays. The whole measurement layer is Engineer-only;
   // dimensionMode still decides its form, but only once it is on screen.
@@ -583,6 +643,7 @@ function render() {
   }
 
   if (engineering) drawScaleBar(ctx, view);
+  drawMathLayer(ctx, view);
   if (debugOverlayVisible) drawDebugOverlay();
   styleWheelFrame(app);
 }
@@ -640,6 +701,7 @@ function drawDebugOverlay() {
   const padding = 12;
   const lineH = 18;
   const brush = brushCacheStats();
+  const ink = inkLayerStats();
   const lines = [
     `panX:  ${view.panX.toFixed(1)}`,
     `panY:  ${view.panY.toFixed(1)}`,
@@ -648,6 +710,7 @@ function drawDebugOverlay() {
     `elems: ${scene.elements.length}`,
     `sel:   ${scene.selected.size}`,
     `brush: ${brush.entries} / ${brush.megapixels} MP`,
+    `ink:   ${ink.mode}`,
   ];
   ctx.font = "13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
   ctx.textBaseline = "top";

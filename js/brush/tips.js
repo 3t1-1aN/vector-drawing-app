@@ -12,9 +12,11 @@
 // layer and tints the result in one pass, so a stroke costs one fill no
 // matter how many stamps it contains.
 
+import { renderToothTile, PAPER_TOOTH_PX } from "../render/paper-surface.js";
+
 const SPRITE_PX = 96;      // sprite resolution; stamps scale down from here
 const VARIANTS = 4;        // rim variants cycled along a stroke
-const PAPER_PX = 256;      // grain tile, tiled across the stroke
+const PAPER_PX = 256;      // fallback tooth if the sheet shader is unavailable
 
 // --- Deterministic noise ---------------------------------------------------
 
@@ -181,16 +183,23 @@ export function getTipSprites(preset) {
 // --- Paper grain -----------------------------------------------------------
 
 let paperTile = null;
+let toothPeriod = PAPER_PX;
 
 /**
- * Tileable paper tooth: value noise at two scales, held in the alpha channel.
+ * Where the sheet refuses a little ink, held in the alpha channel.
  *
- * Applied by the renderer as `destination-out`, so alpha here means "how much
- * ink this part of the paper refuses to hold". Two octaves give both the
- * coarse fibre and the fine tooth; one octave alone looks like TV static.
+ * The shader bakes this from the same fibers as the page, one world pixel
+ * per texel. The CPU tile is only used when that bake is unavailable.
+ * Applied as `destination-out`: alpha is how much ink the paper will not hold.
  */
 export function getPaperTile() {
   if (paperTile) return paperTile;
+  const baked = renderToothTile();
+  if (baked) {
+    paperTile = baked;
+    toothPeriod = PAPER_TOOTH_PX;
+    return paperTile;
+  }
   const c = makeCanvas(PAPER_PX, PAPER_PX);
   const ctx = c.getContext("2d");
   const img = ctx.createImageData(PAPER_PX, PAPER_PX);
@@ -238,6 +247,11 @@ function valueNoiseField(size, cells, seed) {
     }
   }
   return out;
+}
+
+export function paperToothPeriod() {
+  getPaperTile();
+  return toothPeriod;
 }
 
 export const PAPER_TILE_PX = PAPER_PX;

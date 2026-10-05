@@ -24,11 +24,17 @@
 
     <h2>Paper</h2>
     <div id="bgSwatches" class="swatch-row"></div>
-    <input id="bgCustomColor" type="color" value="#f5f0e8" class="hidden-input" />
+    <input id="bgCustomColor" type="color" value="#F4F0E6" class="hidden-input" />
     <div class="row">
       <span id="textureLabel" class="field-label">Texture</span>
       <button id="textureToggle" class="switch" role="switch" aria-pressed="true"
               aria-labelledby="textureLabel" title="Paper grain"><span></span></button>
+    </div>
+    <div class="row">
+      <span id="mathLabel" class="field-label">Math assist</span>
+      <button id="mathToggle" class="switch" role="switch" aria-pressed="true"
+              aria-labelledby="mathLabel"
+              title="Quietly recognize and augment math on the canvas"><span></span></button>
     </div>
 
     <div class="section-head">
@@ -108,12 +114,26 @@
   </div>
 
   <!-- Measurement editor — opens on double-click of a shape. -->
-  <div id="measureDialog" class="hidden" role="dialog" aria-labelledby="measureTitle">
-    <form id="measureForm">
+  <div id="measureDialog" class="float-dialog hidden" role="dialog" aria-labelledby="measureTitle">
+    <form id="measureForm" novalidate>
       <h3 id="measureTitle">Edit measurement</h3>
       <div id="measureFields"></div>
+      <p id="measureError" class="float-note" hidden></p>
       <div class="measure-actions">
         <button type="button" id="measureCancel">Cancel</button>
+        <button type="submit" class="primary">Apply</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="mathEditDialog" class="float-dialog hidden" role="dialog" aria-labelledby="mathEditTitle">
+    <form id="mathEditForm" novalidate>
+      <h3 id="mathEditTitle">Expression</h3>
+      <input id="mathEditInput" type="text" autocomplete="off" spellcheck="false"
+             placeholder="2*x+5=15" />
+      <p id="mathEditError" class="float-note" hidden></p>
+      <div class="measure-actions">
+        <button type="button" id="mathEditCancel">Cancel</button>
         <button type="submit" class="primary">Apply</button>
       </div>
     </form>

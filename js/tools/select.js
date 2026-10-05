@@ -9,6 +9,8 @@ import {
   getBounds, cloneElement, translateElement, transformElement,
 } from "../scene/element.js";
 import { TransformCommand } from "../scene/scene.js";
+import { touchElement } from "../render/ink-rev.js";
+import { onSceneMutated } from "../math/pipeline.js";
 import { pickHandle } from "../render/select.js";
 
 const PICK_TOLERANCE_PX = 6;
@@ -75,7 +77,10 @@ function anchorForHandle(bounds, id) {
 function restoreSnapshots(scene) {
   for (const rec of state.snapshots) {
     const el = scene.getById(rec.id);
-    if (el) Object.assign(el, cloneElement(rec.el));
+    if (el) {
+      Object.assign(el, cloneElement(rec.el));
+      touchElement(el);
+    }
   }
 }
 
@@ -214,7 +219,10 @@ export const selectTool = {
         if (!elementEqual(before, after)) changed = true;
         cmd.records.push({ id: rec.id, before, after });
       }
-      if (changed) app.history.push(cmd);
+      if (changed) {
+        app.history.push(cmd);
+        onSceneMutated(app);
+      }
       reset();
       return;
     }

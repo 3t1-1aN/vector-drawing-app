@@ -27,7 +27,7 @@ export function sampleScreen(scene, sx, sy) {
   ensure();
   resetToScreenSpace(ctx);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawBackground(ctx);
+  drawBackground(ctx, view);
   applyViewTransform(ctx, view);
   drawScene(ctx, scene, view, null);
 

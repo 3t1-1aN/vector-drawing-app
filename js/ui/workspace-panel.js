@@ -13,6 +13,8 @@
 import { appearance, BACKGROUNDS, GRID_TYPES } from "../workspace/appearance.js";
 import { workspace, setWorkspaceMode } from "../workspace/mode.js";
 import { paperTileFor } from "../render/background.js";
+import { bakePaper, paperParamsFor } from "../render/paper-surface.js";
+import { mathAssist } from "../math/settings.js";
 
 // Preview tiles stretch to their column, so only the shape is fixed here;
 // the pixel sizes come from layout at paint time.
@@ -62,12 +64,27 @@ function sizeToLayout(canvas, aspect) {
  * colour to fall back to, so it always uses its tile.
  */
 function fillSheet(ctx, canvas, background, color) {
-  if (background !== "transparent" && !appearance.paperTexture) {
-    ctx.fillStyle = color;
-  } else {
+  if (background === "transparent") {
     ctx.fillStyle = ctx.createPattern(cachedPaperTile(background, color), "repeat");
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return;
   }
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!appearance.paperTexture) {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  const preset = BACKGROUNDS[background] || BACKGROUNDS.custom;
+  const dpr = window.devicePixelRatio || 1;
+  const painted = bakePaper(canvas, {
+    params: paperParamsFor(color, preset.grain),
+    dpr,
+    zoom: 1,
+  });
+  if (!painted) {
+    ctx.fillStyle = ctx.createPattern(cachedPaperTile(background, color), "repeat");
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 }
 
 /** Paint a paper preset into a swatch canvas. */
@@ -195,6 +212,7 @@ export function initWorkspacePanel({ onChange = () => {} } = {}) {
   const patternRow = document.getElementById("gridPatterns");
   const customColor = document.getElementById("bgCustomColor");
   const textureToggle = document.getElementById("textureToggle");
+  const mathToggle = document.getElementById("mathToggle");
   const gridToggle = document.getElementById("gridToggle");
   const gridOpacity = document.getElementById("gridOpacity");
   const gridColor = document.getElementById("gridColor");
@@ -259,6 +277,14 @@ export function initWorkspacePanel({ onChange = () => {} } = {}) {
     sync();
     onChange();
   });
+
+  if (mathToggle) {
+    mathToggle.addEventListener("click", () => {
+      mathAssist.enabled = !mathAssist.enabled;
+      sync();
+      onChange({ mathAssist: mathAssist.enabled });
+    });
+  }
 
   // --- Grid pattern ------------------------------------------------------
   for (const type of GRID_TYPES) {
@@ -349,6 +375,9 @@ export function initWorkspacePanel({ onChange = () => {} } = {}) {
     repaintPapers();
     customColor.value = appearance.backgroundColor;
     textureToggle.setAttribute("aria-pressed", String(appearance.paperTexture));
+    if (mathToggle) {
+      mathToggle.setAttribute("aria-pressed", String(mathAssist.enabled));
+    }
 
     for (const btn of patternRow.querySelectorAll("button")) {
       const on = btn.dataset.grid === appearance.gridType;

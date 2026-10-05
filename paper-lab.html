@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PaperSurface Test Sheet</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#d8d4cb;--panel:#f2efe8;--panel-ink:#2b2a27;--muted:#77736a;--line:#c9c4b8}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#262624;--panel:#323230;--panel-ink:#e8e5dc;--muted:#a09c91;--line:#4a4944}}
+:root[data-theme="dark"]{--bg:#262624;--panel:#323230;--panel-ink:#e8e5dc;--muted:#a09c91;--line:#4a4944}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--panel-ink);font:13px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{padding:32px 16px 80px;transition:padding .2s}
+@media(min-width:900px){body.open main{padding-right:312px}}
+.sheet{position:relative;isolation:isolate;width:min(820px,100%);margin:0 auto;background:#F4F0E6}
+.sheet canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+.ink{position:relative;z-index:1;padding:380px 72px 340px;color:#2e2e2e;font-family:Georgia,"Iowan Old Style","Times New Roman",serif;mix-blend-mode:multiply;filter:url(#ink)}
+.ink h1{font-size:54px;line-height:1.1;margin:0 0 6px;font-weight:700;letter-spacing:-.01em}
+.ink h2{font-size:22px;font-weight:400;margin:0 0 28px;font-style:italic}
+.ink p{font-size:18px;line-height:1.7;margin:0 0 18px}
+.ink .small{font-size:13px;font-weight:300}
+.ink svg{display:block;width:100%;height:auto;margin:30px 0 0;overflow:visible}
+.ink svg path{fill:none;stroke:#2e2e2e;stroke-linecap:round;stroke-linejoin:round}
+#panel{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:284px;max-height:calc(100vh - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;z-index:5}
+body:not(.open) #panel .body{display:none}
+#panel header{display:flex;justify-content:space-between;align-items:center;font-weight:600}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:6px;padding:3px 9px;cursor:pointer}
+.row{display:grid;grid-template-columns:1fr 54px;gap:2px 8px;margin-top:9px}
+.row label{color:var(--muted)}.row output{text-align:right;font-variant-numeric:tabular-nums}
+.row input[type=range]{grid-column:1/3;width:100%;margin:0}
+.row input[type=color]{grid-column:1/3;width:100%;height:26px;padding:0;border:1px solid var(--line);background:none}
+.chk{display:flex;gap:8px;margin-top:10px;align-items:center}
+.btns{display:flex;gap:6px;margin-top:12px}
+@media(max-width:899px){#panel{top:auto;bottom:0;right:0;left:0;width:auto;max-height:42vh;border-radius:10px 10px 0 0;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}}
+</style>
+</head>
+<body class="open">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<filter id="ink" x="-1%" y="-1%" width="102%" height="102%" color-interpolation-filters="sRGB">
+<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="11" result="n"/>
+<feDisplacementMap id="fDisp" in="SourceGraphic" in2="n" scale="0.5" xChannelSelector="R" yChannelSelector="G" result="d0"/>
+<feGaussianBlur id="fBlur" in="d0" stdDeviation="0.08" result="d"/>
+<feColorMatrix id="fAlpha" in="n" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.35 0 0 0 0.9" result="a"/>
+<feComposite in="d" in2="a" operator="in"/>
+</filter>
+</svg>
+<main>
+<div class="sheet" id="sheet">
+<canvas id="paper"></canvas>
+<div class="ink">
+<h1>Placeholder Heading</h1>
+<h2>A quiet subheading in regular italic</h2>
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+<p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. <strong>Excepteur sint occaecat</strong> cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+<p class="small">Small caption text in a light weight, for checking thin ink.</p>
+<svg viewBox="0 0 700 300" role="img" aria-label="Sample handwritten strokes in several ink weights">
+<path stroke-width="1" opacity=".9" d="M10 30 C80 4 130 62 200 32 S320 14 390 40 S510 64 590 30 S670 18 690 34"/>
+<path stroke-width="1.8" opacity=".95" d="M10 110 c20-60 50-60 40 0 c-8 30-30 20-20-10 c12-34 50-40 62-6 c8 24 20 24 28-2 c10-34 36-30 34-4 c-2 22 20 22 30-4 c10-26 40-26 36 2 c-4 20 16 22 28-8 c8-20 30-22 30-2 c0 18 14 16 26-6"/>
+<path stroke-width="3" opacity=".92" d="M20 190 C60 150 90 230 130 180 S190 150 220 200 S290 230 320 170 S380 160 410 200 S470 220 500 180"/>
+<path stroke-width="4.6" opacity=".88" d="M20 262 C140 246 260 278 380 258 S600 250 680 266"/>
+<path stroke-width="1.4" opacity=".85" d="M520 120 c10-50 40-50 34 0 c-4 26-24 22-16-6 c10-30 44-30 56-2 c8 18 22 16 30-6"/>
+</svg>
+</div>
+</div>
+</main>
+<aside id="panel">
+<header><span>Paper parameters</span><button id="tog">Hide</button></header>
+<div class="body">
+<div id="ctrls"></div>
+<label class="chk"><input type="checkbox" id="flat"> Show flat colour (compare)</label>
+<label class="chk"><input type="checkbox" id="noink"> Disable ink effects</label>
+<div class="btns"><button id="reset">Reset</button><button id="copy">Copy values</button></div>
+</div>
+</aside>
+<script>
+const DEF={paperColor:'#F4F0E6',grainIntensity:.08,grainScale:1,fiberIntensity:.35,fiberScale:1,imperfectionIntensity:.35,stains:.25,variation:.4,warmth:.3,edgeVariation:.3,lightingIntensity:.35,inkInteraction:.35,inkBleed:.25};
+const RANGE={grainIntensity:[0,.3,.001],grainScale:[.4,3,.01],fiberIntensity:[0,1,.01],fiberScale:[.5,3,.01],imperfectionIntensity:[0,1,.01],stains:[0,1,.01],variation:[0,1,.01],warmth:[0,1,.01],edgeVariation:[0,1,.01],lightingIntensity:[0,1,.01],inkInteraction:[0,1,.01],inkBleed:[0,1,.01]};
+const P={...DEF};
+const FS=`precision highp float;
+uniform vec2 uRes,uSize;uniform float uDpr;uniform vec3 uColor;
+uniform float uGrain,uGrainS,uFiber,uFiberS,uImp,uStain,uVar,uWarm,uEdge,uLight;
+float h12(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+vec2 h22(vec2 p){vec3 q=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973));q+=dot(q,q.yzx+33.33);return fract((q.xx+q.yz)*q.zy);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);
+return mix(mix(h12(i),h12(i+vec2(1,0)),u.x),mix(h12(i+vec2(0,1)),h12(i+vec2(1,1)),u.x),u.y);}
+float fibers(vec2 p,float cell,float prob,out float tone){
+vec2 id=floor(p/cell),f=p/cell-id;float acc=0.;tone=0.;
+for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+vec2 o=vec2(float(i),float(j)),c=id+o;
+if(h12(c+19.1)>prob)continue;
+vec2 ctr=o+h22(c+7.3);float ang=h12(c+3.7)*6.2832,len=.25+h12(c+11.3)*.6;
+vec2 dir=vec2(cos(ang),sin(ang)),d=f-ctr;
+float t=clamp(dot(d,dir),-len*.5,len*.5),k=t/(len*.5);
+vec2 q=d-dir*t-vec2(-dir.y,dir.x)*(1.-k*k)*len*.4*(h12(c+5.5)-.5)*2.;
+float thPx=.25+.4*h12(c+23.1),dpx=length(q)*cell;
+float a=(1.-smoothstep(thPx*.5,thPx*.5+.7,dpx))*(.25+.75*h12(c+31.7))*(1.-abs(k)*.8);
+if(a>acc){acc=a;tone=h12(c+41.3)<.3?1.:-1.;}}
+return acc;}
+void main(){
+vec2 w=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y)/uDpr;
+vec3 col=uColor*(vec3(1.)+uWarm*vec3(.02,.006,-.04));
+float low=vn(w/420.+3.1)*.6+vn(w/150.+9.7)*.4-.5;
+col+=low*uVar*.06;
+float gs=uGrainS;
+float g=(vn(w/(1.3*gs))-.5)*.5+(vn(w/(2.7*gs)+17.)-.5)*.35+(vn(w/(.8*gs)+41.)-.5)*.3;
+vec2 r=mat2(.8,.6,-.6,.8)*w;
+g+=(vn(vec2(r.x*.3,r.y*1.1)/gs+5.)-.5)*.35;
+g+=(vn(w/9.+71.)-.5)*.45+(vn(w/22.+5.)-.5)*.3;
+col+=g*uGrain;
+float tone,t2;float fa=fibers(w,22.*uFiberS,.3,tone);float fb=fibers(w+300.,64.*uFiberS,.09,t2);
+col+=(tone>0.?vec3(fa*.08):-fa*vec3(.2,.25,.34))*uFiber;
+col+=(t2>0.?vec3(fb*.06):-fb*vec3(.16,.2,.27))*uFiber;
+float cs=14.;vec2 pid=floor(w/cs);
+if(h12(pid+91.7)>.97){vec2 pc=(pid+.2+.6*h22(pid+13.1))*cs;float rad=.3+.3*h12(pid+5.9);
+col=mix(col,vec3(.12),(1.-smoothstep(rad*.5,rad+.5,length(w-pc)))*uImp*.8);}
+vec2 fid=floor(w/90.);
+for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+vec2 c=fid+vec2(float(i),float(j));if(h12(c+201.3)>.06)continue;
+vec2 d=w-(c+.15+.7*h22(c+17.7))*90.;float ang=h12(c+3.3)*6.28,ca=cos(ang),sa=sin(ang);
+d=vec2(ca*d.x+sa*d.y,-sa*d.x+ca*d.y);d.y*=1.+h12(c+9.1);
+float R=(.7+1.5*h12(c+5.9))*(.75+.5*vn(d*1.3+c));
+float a=1.-smoothstep(R*.6,R+.5,length(d));float s=h12(c+66.6);
+vec3 tc=s<.5?vec3(.1):s<.7?vec3(.15,.4,.7):s<.85?vec3(.8,.4,.15):vec3(.45,.43,.33);
+col=mix(col,tc,a*uImp*.7);}
+float st=smoothstep(.6,.82,vn(w/60.+23.))*smoothstep(.5,.72,vn(w/240.+61.));
+col+=st*uStain*vec3(.04,-.015,-.06);
+vec2 q=(w-uSize*.5)/vec2(uSize.x,uSize.x*1.6);float d2=dot(q,q);
+col*=1.+uLight*.1*(.3-1.1*d2);
+float e=min(min(w.x,uSize.x-w.x),min(w.y,uSize.y-w.y));
+col*=1.-uEdge*.03*(1.-smoothstep(0.,40.+30.*vn(w/50.),e));
+col+=(h12(w*uDpr+.5)-.5)/255.;
+gl_FragColor=vec4(col,1.);}`;
+const sheet=document.getElementById('sheet'),cv=document.getElementById('paper');
+const gl=cv.getContext('webgl',{antialias:false,alpha:false});
+let U={},raf=0,prog=null,buf=null,loc=-1;
+if(gl){
+const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);return o;};
+prog=gl.createProgram();
+gl.attachShader(prog,sh(gl.VERTEX_SHADER,'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}'));
+gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+loc=gl.getAttribLocation(prog,'p');
+['uRes','uSize','uDpr','uColor','uGrain','uGrainS','uFiber','uFiberS','uImp','uStain','uVar','uWarm','uEdge','uLight'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+}
+const rgb=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16)/255);
+function draw(){
+raf=0;sheet.style.background=P.paperColor;
+if(!gl)return;
+const w=sheet.clientWidth,h=sheet.clientHeight;
+let dpr=Math.min(window.devicePixelRatio||1,2);
+const mx=Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE),8192);
+dpr=Math.min(dpr,mx/Math.max(w,h));
+const bw=Math.max(1,Math.round(w*dpr)),bh=Math.max(1,Math.round(h*dpr));
+if(cv.width!==bw||cv.height!==bh){cv.width=bw;cv.height=bh;}
+gl.viewport(0,0,cv.width,cv.height);
+gl.useProgram(prog);
+gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+gl.uniform2f(U.uRes,cv.width,cv.height);gl.uniform2f(U.uSize,w,h);gl.uniform1f(U.uDpr,dpr);
+gl.uniform3fv(U.uColor,rgb(P.paperColor));
+gl.uniform1f(U.uGrain,P.grainIntensity);gl.uniform1f(U.uGrainS,P.grainScale);
+gl.uniform1f(U.uFiber,P.fiberIntensity);gl.uniform1f(U.uFiberS,P.fiberScale);
+gl.uniform1f(U.uImp,P.imperfectionIntensity);gl.uniform1f(U.uStain,P.stains);gl.uniform1f(U.uVar,P.variation);
+gl.uniform1f(U.uWarm,P.warmth);gl.uniform1f(U.uEdge,P.edgeVariation);gl.uniform1f(U.uLight,P.lightingIntensity);
+gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
+const schedule=()=>{if(!raf)raf=requestAnimationFrame(draw);};
+function ink(){
+const k=P.inkInteraction,on=!document.getElementById('noink').checked;
+document.querySelector('.ink').style.filter=on?'url(#ink)':'none';
+document.getElementById('fAlpha').setAttribute('values',`0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ${k} 0 0 0 ${1-k*.35}`);
+document.getElementById('fDisp').setAttribute('scale',(P.inkBleed*2).toFixed(3));
+document.getElementById('fBlur').setAttribute('stdDeviation',(P.inkBleed*.35).toFixed(3));
+}
+function update(){schedule();ink();}
+const ctrls=document.getElementById('ctrls'),ins={};
+function addRow(k){
+const d=document.createElement('div');d.className='row';
+const lab=document.createElement('label');lab.textContent=k;
+const out=document.createElement('output');
+const inp=document.createElement('input');
+if(k==='paperColor'){inp.type='color';out.textContent=P[k];}
+else{const r=RANGE[k];inp.type='range';inp.min=r[0];inp.max=r[1];inp.step=r[2];out.textContent=P[k];}
+inp.value=P[k];inp.setAttribute('aria-label',k);
+inp.oninput=()=>{P[k]=k==='paperColor'?inp.value:+inp.value;out.textContent=P[k];update();};
+ins[k]=[inp,out];d.append(lab,out,inp);ctrls.appendChild(d);
+}
+Object.keys(DEF).forEach(addRow);
+document.getElementById('flat').onchange=e=>{cv.style.display=e.target.checked?'none':'block';};
+document.getElementById('noink').onchange=ink;
+document.getElementById('reset').onclick=()=>{Object.assign(P,DEF);for(const k in ins){ins[k][0].value=P[k];ins[k][1].textContent=P[k];}update();};
+document.getElementById('copy').onclick=async e=>{const t=JSON.stringify(P,null,2);try{await navigator.clipboard.writeText(t);e.target.textContent='Copied';}catch(_){e.target.textContent='Copy failed';}setTimeout(()=>e.target.textContent='Copy values',1200);};
+const tog=document.getElementById('tog');
+const setOpen=o=>{document.body.classList.toggle('open',o);tog.textContent=o?'Hide':'Show';};
+tog.onclick=()=>setOpen(!document.body.classList.contains('open'));
+addEventListener('keydown',e=>{if(e.key==='d'&&!/INPUT|TEXTAREA/.test(e.target.tagName))tog.click();});
+new ResizeObserver(schedule).observe(sheet);
+update();
+</script>
+</body>
+</html>

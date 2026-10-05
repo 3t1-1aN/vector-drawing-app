@@ -1,19 +1,16 @@
 // render/background.js
-// Concepts-inspired paper backgrounds. Each preset renders a base color
-// under a procedural paper grain, cached as a repeating CanvasPattern.
-// Drawn in SCREEN space (before the view transform) so the paper reads
-// like a sheet under glass: the grain never scales with zoom and tiles
-// seamlessly while panning.
+// Paper backgrounds. The sheet is one continuous surface in world
+// coordinates (see paper-surface.js): panning keeps the grain on the page,
+// and zooming looks closer instead of stretching a tile. The transparent
+// preset stays a screen-space checker. Flat mode is the base colour alone.
 //
-// The grain is layered value noise rather than per-pixel randomness.
-// Uncorrelated noise reads as television static no matter how faint it is,
-// because every pixel is independent of its neighbours; paper has structure
-// at several sizes at once -- broad mottling from how the sheet was pressed,
-// fibre clumping under that, and fine tooth on top.
+// If WebGL is missing, a cached value-noise tile stands in. It repeats, so
+// it is only a fallback, not the sheet the shader draws.
 
 import {
   appearance, BACKGROUNDS, getBackgroundBaseColor, hexToRgb,
 } from "../workspace/appearance.js";
+import { paintPaper, paperParamsFor } from "./paper-surface.js";
 
 const TILE = 512;
 const CHECKER = 12; // px per checker square for the transparent preset
@@ -152,12 +149,39 @@ export function isPaperFlat() {
   return !appearance.paperTexture && appearance.background !== "transparent";
 }
 
-/** Fill the whole viewport with the current background. Screen space. */
-export function drawBackground(ctx) {
-  ctx.fillStyle = isPaperFlat()
-    ? (getBackgroundBaseColor() || "#1e1e22")
-    : getPattern(ctx);
-  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+/** Fill the viewport. `view` locks the sheet to the page while panning. */
+export function drawBackground(ctx, view) {
+  const dpr = window.devicePixelRatio || 1;
+  const destW = ctx.canvas.width / dpr;
+  const destH = ctx.canvas.height / dpr;
+  const base = getBackgroundBaseColor() || "#1e1e22";
+
+  if (appearance.background === "transparent") {
+    ctx.fillStyle = getPattern(ctx);
+    ctx.fillRect(0, 0, destW, destH);
+    return;
+  }
+  if (isPaperFlat()) {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, destW, destH);
+    return;
+  }
+
+  const preset = BACKGROUNDS[appearance.background] || BACKGROUNDS.custom;
+  const camera = view || { panX: 0, panY: 0, zoom: 1 };
+  const painted = paintPaper(ctx, {
+    destW,
+    destH,
+    bufferScale: dpr,
+    panX: camera.panX,
+    panY: camera.panY,
+    zoom: camera.zoom,
+    params: paperParamsFor(base, preset.grain),
+  });
+  if (!painted) {
+    ctx.fillStyle = getPattern(ctx);
+    ctx.fillRect(0, 0, destW, destH);
+  }
 }
 
 /**

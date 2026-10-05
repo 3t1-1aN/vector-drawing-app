@@ -12,6 +12,21 @@
 
 html,
 body {
+  /* Shared by the settings panel and the floating editors. */
+  --panel-body: rgba(30, 31, 36, 0.965);
+  --panel-ink: #8d93a1;
+  --panel-ink-hi: #eceef3;
+  --panel-line: rgba(255, 255, 255, 0.06);
+  --panel-field: rgba(255, 255, 255, 0.045);
+  --panel-field-line: rgba(255, 255, 255, 0.1);
+  --panel-quick: 110ms;
+  --panel-ease-time: 150ms;
+  --panel-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --panel-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 1px rgba(0, 0, 0, 0.4),
+    0 9px 20px rgba(0, 0, 0, 0.36);
+
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -35,7 +50,7 @@ textarea {
 #stage {
   display: block;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   cursor: default;
   touch-action: none;
   -webkit-touch-callout: none;
@@ -65,10 +80,11 @@ textarea {
 
 #panelToggle:hover { background: rgba(40, 40, 48, 0.95); color: #fff; }
 
+#panelToggle:active { transform: translateY(1px); }
+
 #panelToggle:focus-visible {
   outline: none;
-  border-color: #5aa0ff;
-  box-shadow: 0 0 0 2px rgba(90, 160, 255, 0.5);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
 }
 
 /* ------------------------------------------------------------------
@@ -78,33 +94,24 @@ textarea {
   /* Same surfaces and timings as the console, so the two read as parts of
      one instrument rather than two dark rectangles that happen to share a
      screen. See css/style-wheel.css for where these come from. */
-  --panel-body: rgba(30, 31, 36, 0.965);
-  --panel-ink: #8d93a1;
-  --panel-ink-hi: #eceef3;
-  --panel-quick: 110ms;
-  --panel-ease-time: 150ms;
-  --panel-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-
   position: fixed;
   top: 54px;
   right: 12px;
   width: 232px;
-  max-height: calc(100vh - 68px);
+  max-height: calc(100dvh - 68px);
   overflow-y: auto;
   /* Reserve the gutter in both modes. Engineer overflows and Draw does not,
      and without this the preview tiles resize every time you switch. */
   scrollbar-gutter: stable;
   padding: 13px;
   background: var(--panel-body);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-line);
   border-radius: 11px;
   backdrop-filter: blur(6px);
   /* Contact shadow plus an ambient one: the panel rests on the canvas. */
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 1px 1px rgba(0, 0, 0, 0.4),
-    0 9px 20px rgba(0, 0, 0, 0.36);
-  z-index: 10;
+  box-shadow: var(--panel-shadow);
+  /* Above the style wheel so a narrow screen can still reach these controls. */
+  z-index: 14;
   user-select: none;
   font-size: 12px;
   display: flex;
@@ -127,7 +134,7 @@ textarea {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  color: #6e7480;
+  color: var(--panel-ink);
   font-weight: 600;
 }
 
@@ -187,8 +194,8 @@ textarea {
 #panel select {
   padding-right: 22px;
   background-image:
-    linear-gradient(45deg, transparent 50%, #7c828e 50%),
-    linear-gradient(135deg, #7c828e 50%, transparent 50%);
+    linear-gradient(45deg, transparent 50%, var(--panel-ink) 50%),
+    linear-gradient(135deg, var(--panel-ink) 50%, transparent 50%);
   background-position: right 11px top 50%, right 7px top 50%;
   background-size: 4px 4px, 4px 4px;
   background-repeat: no-repeat;
@@ -224,7 +231,7 @@ textarea {
   border: none;
   border-radius: 5px;
   background: none;
-  color: #7c828e;
+  color: var(--panel-ink);
   font: 600 11px/1 inherit;
   letter-spacing: 0.05em;
   padding: 7px 4px;
@@ -296,7 +303,7 @@ textarea {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  color: #6e7480;
+  color: var(--panel-ink);
   font-weight: 600;
   cursor: pointer;
   list-style: none;
@@ -309,7 +316,7 @@ textarea {
   float: right;
   font-size: 12px;
   line-height: 0.85;
-  color: #5c6270;
+  color: var(--panel-ink);
 }
 
 .shortcuts[open] summary::after { content: "\2212"; }
@@ -330,8 +337,8 @@ textarea {
   line-height: 1.35;
 }
 
-.shortcuts dt { color: #6e7480; }
-.shortcuts dd { color: #8d93a1; }
+.shortcuts dt { color: var(--panel-ink); }
+.shortcuts dd { color: var(--panel-ink-hi); }
 
 /* ------------------------------------------------------------------
    Canvas section — paper and grid.
@@ -399,7 +406,7 @@ textarea {
   font-size: 9.5px;
   letter-spacing: 0.04em;
   text-align: center;
-  color: #7c828e;
+  color: var(--panel-ink);
   transition: color var(--panel-quick, 110ms) var(--panel-ease, ease);
 }
 
@@ -505,7 +512,7 @@ textarea {
   height: 14px;
   margin: 2px;
   border-radius: 50%;
-  background: #6e7480;
+  background: var(--panel-ink);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   transition:
     transform var(--panel-ease-time, 150ms) var(--panel-ease, ease),
@@ -584,7 +591,7 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.04);
-  color: #8d93a1;
+  color: var(--panel-ink);
   font: 500 10.5px/1 inherit;
   letter-spacing: 0.03em;
   cursor: pointer;
@@ -626,28 +633,51 @@ textarea {
 }
 
 /* ------------------------------------------------------------------
-   Measurement editor dialog (double-click a shape)
+   Floating editors — measurement and expression. Same surface as the
+   settings panel so they read as part of the instrument, not a second UI.
 ------------------------------------------------------------------ */
-#measureDialog {
+.float-dialog {
   position: fixed;
   z-index: 20;
-  min-width: 200px;
-  padding: 12px;
-  background: rgba(20, 20, 24, 0.95);
-  border: 1px solid rgba(120, 200, 255, 0.35);
-  border-radius: 10px;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  min-width: 228px;
+  max-width: calc(100vw - 24px);
+  padding: 13px 13px 12px;
+  background: var(--panel-body);
+  border: 1px solid var(--panel-line);
+  border-radius: 11px;
+  box-shadow: var(--panel-shadow);
+  color: var(--panel-ink-hi);
 }
 
-#measureDialog.hidden { display: none; }
+.float-dialog.hidden { display: none; }
 
-#measureDialog h3 {
-  font-size: 12px;
+.float-dialog h3 {
+  margin: 0 0 11px;
+  font-size: 10px;
   font-weight: 600;
-  color: #9cc8ff;
-  margin-bottom: 10px;
-  text-transform: capitalize;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--panel-ink);
+}
+
+#mathEditInput {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 12px;
+  background: var(--panel-field);
+  border: 1px solid var(--panel-field-line);
+  color: var(--panel-ink-hi);
+  border-radius: 6px;
+  padding: 8px 9px;
+  font: 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+#mathEditInput::placeholder { color: var(--panel-ink); }
+
+#mathEditInput:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 #measureFields {
@@ -661,7 +691,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
 }
 
 .measure-row label {
@@ -673,27 +703,44 @@ textarea {
 .measure-input-wrap {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  background: var(--panel-field);
+  border: 1px solid var(--panel-field-line);
+  border-radius: 6px;
+  padding-right: 8px;
+}
+
+.measure-input-wrap:focus-within {
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 .measure-input-wrap input {
-  width: 80px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #e6e6e6;
-  border-radius: 6px;
-  padding: 5px 6px;
+  width: 72px;
+  border: none;
+  background: transparent;
+  color: var(--panel-ink-hi);
+  padding: 7px 4px 7px 8px;
+  text-align: right;
   font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
-.measure-input-wrap input:focus {
-  outline: none;
-  border-color: rgba(120, 200, 255, 0.6);
+.measure-input-wrap input:focus { outline: none; }
+
+.measure-input-wrap input::-webkit-outer-spin-button,
+.measure-input-wrap input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.measure-input-wrap input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .measure-unit {
-  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #8a8a96;
+  font: 11px/1 ui-sans-serif, system-ui, sans-serif;
+  color: var(--panel-ink);
 }
 
 .measure-actions {
@@ -704,23 +751,68 @@ textarea {
 
 .measure-actions button {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
-  color: #cfcfd6;
-  font: 500 12px/1 inherit;
-  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--panel-ink);
+  font: 500 11.5px/1 inherit;
+  padding: 7px 11px;
   border-radius: 6px;
   cursor: pointer;
 }
 
-.measure-actions button:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.measure-actions button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #c9ced9;
+}
+
+.measure-actions button:active { transform: translateY(1px); }
 
 .measure-actions button.primary {
-  background: rgba(90, 160, 255, 0.25);
-  border-color: rgba(120, 200, 255, 0.4);
-  color: #9cc8ff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #eceef3;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .measure-actions button.primary:hover {
-  background: rgba(90, 160, 255, 0.4);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.measure-actions button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+.float-note {
+  margin: -2px 0 10px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: #e4b8aa;
+}
+
+.float-note[hidden] { display: none; }
+
+.measure-input-wrap:has(input[aria-invalid="true"]),
+#mathEditInput[aria-invalid="true"] {
+  border-color: rgba(224, 160, 140, 0.8);
+}
+
+#panel input[type="number"]::-webkit-outer-spin-button,
+#panel input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+#panel input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  #panel {
+    width: min(232px, calc(100vw - 24px));
+    max-height: calc(100dvh - 60px);
+  }
 }

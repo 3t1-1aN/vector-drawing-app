@@ -10,6 +10,7 @@ import { bakeToPath, cloneElement, createIdElement, getBounds, hitTest } from ".
 import { isFilledMedium } from "../brush/presets.js";
 import { activeBrush } from "../brush/active-brush.js";
 import { samplesFrom } from "../brush/input.js";
+import { onSceneMutated } from "../math/pipeline.js";
 
 const state = {
   active: false,
@@ -177,6 +178,7 @@ export function commitErase(app, trail, radiusFor) {
   const ops = applyErase(app.scene, trail, radiusFor);
   if (ops.length === 0) return false;
   app.history.push(new EraseCommand(ops));
+  onSceneMutated(app);
   return true;
 }
 
@@ -190,7 +192,10 @@ function eraseStep(app, trail) {
 }
 
 function finishGesture(app) {
-  if (state.ops && state.ops.length && app) app.history.push(new EraseCommand(state.ops));
+  if (state.ops && state.ops.length && app) {
+    app.history.push(new EraseCommand(state.ops));
+    onSceneMutated(app);
+  }
   state.ops = null;
   state.active = false;
   state.lastApplied = null;

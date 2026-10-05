@@ -4,7 +4,7 @@
 // project I/O mutate it.
 
 export const BACKGROUNDS = {
-  "paper-warm":  { label: "Warm",      color: "#f5f0e8", grain: 10 },
+  "paper-warm":  { label: "Warm",      color: "#F4F0E6", grain: 10 },
   "paper-cool":  { label: "Cool",      color: "#f2f4f6", grain: 8 },
   "paper-cream": { label: "Cream",     color: "#faf3e6", grain: 12 },
   "blueprint":   { label: "Blueprint", color: "#1a3a5c", grain: 12 },
@@ -17,7 +17,7 @@ export const GRID_TYPES = ["graph", "dot", "lined", "isometric"];
 
 export const appearance = {
   background: "paper-warm",
-  backgroundColor: "#f5f0e8", // used when background === "custom"
+  backgroundColor: "#F4F0E6", // used when background === "custom"
   // Paper grain. Off leaves the flat base colour, which is what you want
   // for clean export-style output and on low-contrast displays where the
   // tooth reads as dirt. The preset's colour is unchanged either way.
