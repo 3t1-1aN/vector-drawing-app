@@ -212,13 +212,29 @@ function syncPanelFromSettings() {
 // --- Workspace (background + grid) panel --------------------------------
 const panel = document.getElementById("panel");
 const panelToggle = document.getElementById("panelToggle");
-// A closed panel is only faded out. Without inert, Tab still walks every
-// control inside it, including ones the user cannot see.
-panel.inert = panel.classList.contains("collapsed");
-panelToggle.addEventListener("click", () => {
-  const open = panel.classList.toggle("collapsed") === false;
+// Below this width the 232px panel covers the sheet and the control wheel.
+// Phones and a portrait tablet in split view hit it; a landscape tablet does not.
+const PANEL_OVERLAY_WIDTH = 720;
+
+function setPanelOpen(open) {
+  panel.classList.toggle("collapsed", !open);
+  // A closed panel is only faded out. Without inert, Tab still walks every
+  // control inside it, including ones the user cannot see.
   panel.inert = !open;
   panelToggle.setAttribute("aria-expanded", String(open));
+}
+
+setPanelOpen(window.innerWidth >= PANEL_OVERLAY_WIDTH);
+let panelLayoutWide = window.innerWidth >= PANEL_OVERLAY_WIDTH;
+window.addEventListener("resize", () => {
+  const wide = window.innerWidth >= PANEL_OVERLAY_WIDTH;
+  // Crossing into a narrow window closes the panel. Opening it again is a tap
+  // on the gear, and widening the window does not pop it back open.
+  if (panelLayoutWide && !wide) setPanelOpen(false);
+  panelLayoutWide = wide;
+});
+panelToggle.addEventListener("click", () => {
+  setPanelOpen(panel.classList.contains("collapsed"));
 });
 const workspacePanel = initWorkspacePanel({
   onChange(detail) {
