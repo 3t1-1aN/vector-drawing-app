@@ -224,16 +224,22 @@ function setPanelOpen(open) {
   panelToggle.setAttribute("aria-expanded", String(open));
 }
 
-setPanelOpen(window.innerWidth >= PANEL_OVERLAY_WIDTH);
-let panelLayoutWide = window.innerWidth >= PANEL_OVERLAY_WIDTH;
-window.addEventListener("resize", () => {
-  const wide = window.innerWidth >= PANEL_OVERLAY_WIDTH;
-  // Crossing into a narrow window closes the panel. Opening it again is a tap
-  // on the gear, and widening the window does not pop it back open.
-  if (panelLayoutWide && !wide) setPanelOpen(false);
-  panelLayoutWide = wide;
-});
+// matchMedia, not a one-time innerWidth read. A viewport can settle after
+// the module runs, and the change event still fires when it does.
+const narrowPanel = window.matchMedia(`(max-width: ${PANEL_OVERLAY_WIDTH - 1}px)`);
+let userChosePanel = false;
+
+function syncPanelLayout() {
+  if (userChosePanel) return;
+  setPanelOpen(!narrowPanel.matches);
+}
+
+syncPanelLayout();
+narrowPanel.addEventListener("change", syncPanelLayout);
+window.addEventListener("resize", syncPanelLayout);
+window.addEventListener("load", syncPanelLayout);
 panelToggle.addEventListener("click", () => {
+  userChosePanel = true;
   setPanelOpen(panel.classList.contains("collapsed"));
 });
 const workspacePanel = initWorkspacePanel({
