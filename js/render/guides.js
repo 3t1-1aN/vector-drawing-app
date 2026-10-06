@@ -4,6 +4,7 @@
 // world space (call after applyViewTransform).
 
 import { lineLength } from "../scene/element.js";
+import { useSheetText } from "./text-style.js";
 
 const GUIDE_COLOR = "rgba(160, 200, 255, 0.35)";
 const ANGLE_COLOR = "rgba(200, 220, 255, 0.7)";
@@ -41,11 +42,11 @@ export function drawShapeGuides(ctx, view, preview) {
       ctx.arc(el.startX, el.startY, r, 0, ang, ang < 0);
       ctx.stroke();
       const deg = ((ang * 180) / Math.PI).toFixed(0);
-      ctx.fillStyle = ANGLE_COLOR;
-      ctx.font = `${12 / view.zoom}px ui-monospace, monospace`;
       ctx.textAlign = "left";
       ctx.textBaseline = "bottom";
+      const restore = useSheetText(ctx, { typewriter: true, px: 13 / view.zoom });
       ctx.fillText(`${deg}°`, el.startX + r * 0.6, el.startY - 4 / view.zoom);
+      restore();
       break;
     }
     case "rect": {

@@ -9,13 +9,11 @@ import { lineLength, rectSize, getRectCorners } from "../scene/element.js";
 import { edgeLengths } from "../precision/recognize.js";
 import { formatLength, niceScaleBarLength, scaleSettings } from "../precision/scale.js";
 import { isDarkBackground } from "../workspace/appearance.js";
+import { TYPE_COLOR, typeFont, useSheetText } from "./text-style.js";
 
-const LABEL_FONT = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-const LABEL_COLOR = "#e8f1ff";
-const LABEL_RECOGNIZED_COLOR = "#a6ffc4";
-const LABEL_BG = "rgba(0, 0, 0, 0.6)";
-const LABEL_PAD_X = 6;
-const LABEL_PAD_Y = 4;
+const LABEL_FONT = typeFont(13);
+const LABEL_COLOR = TYPE_COLOR;
+const LABEL_RECOGNIZED_COLOR = "#2f6b45";
 const LABEL_OFFSET_PX = 14;
 const LABEL_MIN_SIZE_PX = 24;
 
@@ -84,20 +82,17 @@ function getElementScreenSize(el, view) {
   }
 }
 
-/** Draw one label pill at a screen position (text floats above it). */
+/** Draw one measurement the way the sheet sets a typewriter note. */
 export function drawLabelBox(ctx, text, sx, sy, color) {
+  ctx.save();
   ctx.font = LABEL_FONT;
   ctx.textBaseline = "bottom";
   ctx.textAlign = "center";
-  const textW = ctx.measureText(text).width;
-  const boxW = textW + LABEL_PAD_X * 2;
-  const boxH = 12 + LABEL_PAD_Y * 2;
-  const boxBottom = sy - LABEL_OFFSET_PX;
-  const boxTop = boxBottom - boxH;
-  ctx.fillStyle = LABEL_BG;
-  ctx.fillRect(sx - boxW / 2, boxTop, boxW, boxH);
-  ctx.fillStyle = color;
-  ctx.fillText(text, sx, boxBottom - LABEL_PAD_Y);
+  const restore = useSheetText(ctx, { typewriter: true, px: 13 });
+  if (color && color !== LABEL_COLOR) ctx.fillStyle = color;
+  ctx.fillText(text, sx, sy - LABEL_OFFSET_PX);
+  restore();
+  ctx.restore();
 }
 
 /** Persistent CAD labels for every committed, measurable element. */
@@ -152,11 +147,12 @@ export function drawScaleBar(ctx, view) {
   ctx.lineTo(x + screenLen, y + 5);
   ctx.stroke();
 
-  ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
   ctx.textBaseline = "bottom";
   ctx.textAlign = "left";
-  ctx.fillStyle = dark ? "#cfcfd6" : "#44444e";
+  const restore = useSheetText(ctx, { typewriter: true, px: 13 });
+  if (dark) ctx.fillStyle = "#e8e5dc";
   ctx.fillText(label, x, y - 8);
+  restore();
 }
 
 export { LABEL_COLOR };

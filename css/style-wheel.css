@@ -978,3 +978,74 @@ body.cp-eyedropping #stage {
 
   #colorWheelOverlay .cp-modes { transition-delay: 0ms; }
 }
+
+/* Hide control. Sits in the gap under the tool ring, large enough for a finger. */
+#wheelCollapse,
+#wheelDock {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(20, 20, 24, 0.94);
+  color: #cfcfd6;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 1px rgba(0, 0, 0, 0.4),
+    0 9px 20px rgba(0, 0, 0, 0.36);
+}
+
+#wheelCollapse {
+  position: absolute;
+  left: 50%;
+  top: calc(100% - 22px);
+  z-index: 2;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+#wheelCollapse svg,
+#wheelDock svg {
+  display: block;
+}
+
+#styleWheel[data-edge="top"] #wheelCollapse svg { transform: rotate(180deg); }
+#styleWheel[data-edge="left"] #wheelCollapse svg { transform: rotate(90deg); }
+#styleWheel[data-edge="right"] #wheelCollapse svg { transform: rotate(-90deg); }
+
+#wheelCollapse:hover,
+#wheelDock:hover { background: rgba(40, 40, 48, 0.98); color: #fff; }
+
+#wheelCollapse:active,
+#wheelDock:active { transform: translateX(-50%) translateY(1px); }
+
+#wheelDock:active { transform: translateY(1px); }
+
+#wheelCollapse:focus-visible,
+#wheelDock:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+#styleWheel.is-collapsed {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#wheelDock {
+  position: fixed;
+  z-index: 12;
+  margin: 0;
+}
+
+#wheelDock[hidden] { display: none; }
+
+#wheelDock[data-edge="bottom"] svg { transform: rotate(180deg); }
+#wheelDock[data-edge="left"] svg { transform: rotate(-90deg); }
+#wheelDock[data-edge="right"] svg { transform: rotate(90deg); }

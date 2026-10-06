@@ -10,6 +10,7 @@ import {
 } from "./core/canvas.js";
 import {
   view, screenToWorld, worldToScreen, panBy, zoomAt, fitToBounds, clamp,
+  setPageConstraint, constrainView, PAGE_MARGIN,
 } from "./core/view.js";
 import { Scene, History, AddElementCommand, RemoveElementsCommand, cloneElement } from "./scene/scene.js";
 import { createIdElement, nextId, translateElement } from "./scene/element.js";
@@ -17,9 +18,13 @@ import { GRID_MAJOR, GRID_MINOR } from "./render/grid.js";
 import { drawGrid } from "./render/grid.js";
 import { drawBackground } from "./render/background.js";
 import { initWorkspacePanel } from "./ui/workspace-panel.js";
-import { isEngineering } from "./workspace/mode.js";
-import { initStyleWheel, styleWheelFrame } from "./ui/style-wheel.js";
-import { drawLivePreview } from "./render/elements.js";
+import { isEngineering, bindWorkspace } from "./workspace/mode.js";
+import { bindAppearance } from "./workspace/appearance.js";
+import { bindScale } from "./precision/scale.js";
+import { createDocument } from "./scene/document.js";
+import { initStyleWheel, styleWheelFrame, resetStyleWheel } from "./ui/style-wheel.js";
+import { touchScene } from "./render/ink-rev.js";
+import { drawLivePreview, drawTexts } from "./render/elements.js";
 import { drawInkLayer, inkLayerStats } from "./render/ink-layer.js";
 import {
   drawCommittedMeasurements, drawMeasurementLabel, drawScaleBar,
@@ -41,12 +46,14 @@ import { selectTool } from "./tools/select.js";
 import { nudgeTool } from "./tools/nudge.js";
 import { sliceTool } from "./tools/slice.js";
 import { eraserTool } from "./tools/erase.js";
+import { textTool, handleDoubleTap, doubleTapConsumed, isEditingText } from "./tools/text.js";
 import { exportSvg, downloadText } from "./io/export-svg.js";
 import { serializeProject, deserializeProject, pickFile, readFileText } from "./io/project.js";
 import { openMeasureDialog, closeMeasureDialog, isOpen as measureDialogOpen } from "./ui/measure-dialog.js";
 import { openMathEditAt, closeMathEdit, isMathEditOpen } from "./ui/math-edit.js";
 import { isEyedropperActive } from "./ui/color-picker.js";
 import { setBrush } from "./brush/active-brush.js";
+import { mathAssist } from "./math/settings.js";
 import { brushCacheStats } from "./brush/cache.js";
 import { installBrushTestbed } from "./brush/testbed.js";
 import {
@@ -64,6 +71,7 @@ registerTool("line", lineTool);
 registerTool("rect", rectTool);
 registerTool("circle", circleTool);
 registerTool("pen", penTool);
+registerTool("text", textTool);
 registerTool("nudge", nudgeTool);
 registerTool("slice", sliceTool);
 registerTool("eraser", eraserTool);
@@ -98,6 +106,10 @@ let navPointerId = null;
 let toolPointerId = null;
 
 let activeTool = "line";
+let activeDocument = null;
+// One save stays on the stack between frames so a notebook clip cannot leak.
+// Resizing the canvas wipes that stack; the resize handler clears this flag.
+let frameSaved = false;
 
 // Counters for panX/zoom/cache occupancy. Useful while working on the
 // renderer, permanent clutter for everyone else, so it is off unless asked
@@ -130,6 +142,7 @@ function setActiveTool(name) {
   if (!tool) return;
   const prev = getTool(activeTool);
   if (prev && prev.onDeactivate) prev.onDeactivate(app);
+  if (name !== "text" && isEditingText()) textTool.onDeactivate(app);
   activeTool = name;
   // The hub's tool ring renders from the shared style state, so publishing the
   // change here keeps keyboard shortcuts and ring clicks in sync.
@@ -176,6 +189,8 @@ document.getElementById("loadProject").addEventListener("click", async () => {
     deserializeProject(data, scene);
     deserializeMathState(data.math, app);
     history.clear();
+    if (activeDocument) activeDocument.mathAssist = mathAssist.enabled;
+    constrainView();
     syncPanelFromSettings();
   } catch (err) {
     if (err.message !== "No file selected") console.error(err);
@@ -208,6 +223,7 @@ panelToggle.addEventListener("click", () => {
 const workspacePanel = initWorkspacePanel({
   onChange(detail) {
     if (detail && "mathAssist" in detail) {
+      if (activeDocument) activeDocument.mathAssist = !!detail.mathAssist;
       setMathEnabled(app, detail.mathAssist);
     }
   },
@@ -330,6 +346,7 @@ function revertAccidentalPan() {
 // or mouse down suppresses the compatibility mouse events dblclick-to-measure
 // needs. Text selection is blocked in CSS.
 canvas.addEventListener("pointerdown", (event) => {
+  if (!activeDocument) return;
   if (isFinger(event)) {
     // A resting palm must not pan the page out from under a stroke.
     if (toolPointerId !== null || navPointerId !== null) return;
@@ -362,6 +379,14 @@ canvas.addEventListener("pointerdown", (event) => {
   if (isEyedropperActive()) return;
   // Quiet math chips (e.g. Graph) consume the click before tools.
   if (handleMathPointerDown(app, event)) return;
+  // A second tap on a box, circle, or note types into it. Swallow the tap
+  // so the tool underneath does not also start a stroke.
+  if (handleDoubleTap(app, event)) {
+    capturePointer(event);
+    return;
+  }
+  // A label opened from another tool commits when the next stroke starts.
+  if (isEditingText() && activeTool !== "text") textTool.onDeactivate(app);
   toolPointerId = event.pointerId;
   capturePointer(event);
   const tool = getTool(activeTool);
@@ -427,6 +452,7 @@ canvas.addEventListener(
   "wheel",
   (event) => {
     event.preventDefault();
+    if (!activeDocument) return;
     const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
     zoomAt(event.clientX, event.clientY, factor);
   },
@@ -439,6 +465,10 @@ canvas.addEventListener(
 const PICK_TOLERANCE_PX = 8;
 canvas.addEventListener("dblclick", (event) => {
   if (interaction.spaceDown || interaction.panning) return;
+  if (doubleTapConsumed()) {
+    event.preventDefault();
+    return;
+  }
   if (openMathEditAt(event.clientX, event.clientY)) {
     event.preventDefault();
     return;
@@ -474,10 +504,11 @@ function onControl(event) {
 
 const TOOL_KEYS = {
   KeyV: "select", KeyL: "line", KeyR: "rect", KeyC: "circle",
-  KeyP: "pen", KeyN: "nudge", KeyS: "slice", KeyE: "eraser",
+  KeyP: "pen", KeyT: "text", KeyN: "nudge", KeyS: "slice", KeyE: "eraser",
 };
 
 window.addEventListener("keydown", (event) => {
+  if (!activeDocument) return;
   if (measureDialogOpen() && event.code === "Escape") {
     closeMeasureDialog();
     event.preventDefault();
@@ -485,6 +516,14 @@ window.addEventListener("keydown", (event) => {
   }
   if (isMathEditOpen() && event.code === "Escape") {
     closeMathEdit();
+    event.preventDefault();
+    return;
+  }
+
+  // A typewriter note takes the key before pan, delete, and tool shortcuts,
+  // including when the note was opened by a double-tap under another tool.
+  const typingTool = isEditingText() ? textTool : getTool(activeTool);
+  if (!onControl(event) && typingTool && typingTool.onKeydown && typingTool.onKeydown(app, event)) {
     event.preventDefault();
     return;
   }
@@ -582,7 +621,11 @@ window.addEventListener("blur", () => {
   canvas.classList.remove("pannable", "panning");
 });
 
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", () => {
+  resizeCanvas();
+  frameSaved = false;
+  constrainView();
+});
 
 /** Command: add several elements at once (for duplicate). */
 class AddManyCommand {
@@ -591,11 +634,115 @@ class AddManyCommand {
   undo(scene) { for (const e of this.elements) scene.remove(e.id); }
 }
 
+// --- Document ----------------------------------------------------------
+function activePage() {
+  if (!activeDocument || activeDocument.kind !== "notebook") return null;
+  return activeDocument.pages[0] || null;
+}
+
+function hasDrawingContent() {
+  return scene.elements.length > 0 || scene.artboards.length > 0;
+}
+
+function clearDrawing() {
+  scene.elements = [];
+  scene.artboards = [];
+  scene.clearSelection();
+  history.clear();
+  touchScene();
+  onSceneMutated(app);
+}
+
+function enterDocument(kind) {
+  const doc = createDocument(kind);
+  activeDocument = doc;
+  bindAppearance(doc.appearance);
+  bindScale(doc.scale);
+  bindWorkspace(doc.workspace);
+  setMathEnabled(app, doc.mathAssist);
+  clearDrawing();
+  if (doc.kind === "notebook") {
+    const page = doc.pages[0];
+    setPageConstraint(page);
+    fitToBounds({
+      minX: page.x,
+      minY: page.y,
+      maxX: page.x + page.width,
+      maxY: page.y + page.height,
+    }, PAGE_MARGIN);
+  } else {
+    setPageConstraint(null);
+    view.panX = 0;
+    view.panY = 0;
+    view.zoom = 1;
+  }
+  syncPanelFromSettings();
+  // Show the canvas before placing the wheel. While .is-home is set the
+  // wheel is display:none and its box is empty, so a clamp would park it
+  // in the corner instead of where it was.
+  document.body.classList.remove("is-home");
+  resetStyleWheel();
+}
+
+function showHome() {
+  if (activeDocument && hasDrawingContent()) {
+    if (!window.confirm("Leave this drawing? It isn't saved.")) return;
+  }
+  clearDrawing();
+  activeDocument = null;
+  setPageConstraint(null);
+  resetStyleWheel();
+  document.body.classList.add("is-home");
+}
+
+function wireHome() {
+  document.getElementById("homeInfinite").addEventListener("click", () => enterDocument("infinite"));
+  document.getElementById("homeNotebook").addEventListener("click", () => enterDocument("notebook"));
+  document.getElementById("homeBack").addEventListener("click", showHome);
+}
+
+function pageScreenRect(page) {
+  const origin = worldToScreen(page.x, page.y);
+  return {
+    x: origin.x,
+    y: origin.y,
+    w: page.width * view.zoom,
+    h: page.height * view.zoom,
+  };
+}
+
 // --- Render loop -------------------------------------------------------
-function render() {
+function beginFrame() {
+  if (frameSaved) ctx.restore();
+  ctx.save();
+  frameSaved = true;
   resetToScreenSpace(ctx);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawBackground(ctx, view);
+}
+
+function render() {
+  beginFrame();
+  const page = activePage();
+  let pageRect = null;
+  if (page) {
+    const dpr = window.devicePixelRatio || 1;
+    ctx.fillStyle = "#17181c";
+    ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+    pageRect = pageScreenRect(page);
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 8;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(pageRect.x, pageRect.y, pageRect.w, pageRect.h);
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(pageRect.x, pageRect.y, pageRect.w, pageRect.h);
+    ctx.clip();
+  }
+
+  drawBackground(ctx, view, pageRect);
 
   // World-space scene. Artboards are a drafting construct, so they travel
   // with the rest of the measurement layer rather than with the drawing.
@@ -606,9 +753,21 @@ function render() {
   const tool = getTool(activeTool);
   const preview = tool && tool.getPreview ? tool.getPreview(app) : null;
   const doomed = tool && tool.getDoomed ? tool.getDoomed() : null;
-  drawShapeGuides(ctx, view, preview);
+  // Ink is composited onto the paper already on the canvas, so a pencil
+  // can multiply into the sheet the way the test page does. Guides are
+  // drawn after that blit or the cached frame would cover them.
   drawInkLayer(ctx, scene, view, doomed);
+  drawTexts(ctx, scene, view, preview, doomed);
+  drawShapeGuides(ctx, view, preview);
   drawLivePreview(ctx, view, preview);
+
+  if (page) ctx.restore();
+  if (pageRect) {
+    resetToScreenSpace(ctx);
+    ctx.strokeStyle = "rgba(30, 26, 20, 0.55)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pageRect.x + 0.5, pageRect.y + 0.5, pageRect.w - 1, pageRect.h - 1);
+  }
 
   // Screen-space overlays. The whole measurement layer is Engineer-only;
   // dimensionMode still decides its form, but only once it is on screen.
@@ -712,7 +871,7 @@ function drawDebugOverlay() {
     `brush: ${brush.entries} / ${brush.megapixels} MP`,
     `ink:   ${ink.mode}`,
   ];
-  ctx.font = "13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  ctx.font = "13px \"Special Elite\", \"Courier Prime\", \"Courier New\", Courier, monospace";
   ctx.textBaseline = "top";
   let maxW = 0;
   for (const line of lines) {
@@ -739,6 +898,9 @@ resizeCanvas();
 syncPanelFromSettings();
 initStyleWheel(app);
 setActiveTool("line");
+wireHome();
+// The brush gallery is a dev bootstrap. It needs a canvas, so it skips home.
+if (new URLSearchParams(location.search).has("brushtest")) enterDocument("infinite");
 installBrushTestbed(app);
 requestAnimationFrame(frameLoop);
 

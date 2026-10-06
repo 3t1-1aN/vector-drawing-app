@@ -30,8 +30,12 @@
 // and interaction code do not need to change.
 
 import { activeBrush, setBrush, subscribeStyle } from "../brush/active-brush.js";
-import { BRUSH_PRESETS, getBrushPreset, isFilledMedium } from "../brush/presets.js";
-import { StyleCommand } from "../scene/scene.js";
+import { BRUSH_PRESETS, getBrushPreset, isFilledMedium, widthRangeFor } from "../brush/presets.js";
+import { ERASER_RANGE } from "../tools/erase.js";
+import {
+  TEXT_SIZE_RANGE, displayedTextSize, setTextSize, isEditingText,
+} from "../tools/text.js";
+import { StyleCommand, TransformCommand } from "../scene/scene.js";
 import { touchElement } from "../render/ink-rev.js";
 import {
   initColorPicker, openColorPicker, closeColorPicker, isColorPickerOpen,
@@ -58,9 +62,11 @@ const TOOL_R_OUT = 150;
 const TOOL_R = (TOOL_R_IN + TOOL_R_OUT) / 2;
 const TOOL_DOT_R = 16;       // leaves an even margin inside the band
 const RING_BTN_R = 12;
-
-const MIN_WIDTH = 0.5;
-const MAX_WIDTH = 24;
+// How far a drag must push past the wheel's on-screen stop before it docks.
+const COLLAPSE_PUSH = 36;
+// The hide control hangs below the disc; keep that much room on screen.
+const COLLAPSE_OVERHANG = 22;
+const DOCK_SIZE = 44;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -92,13 +98,12 @@ const PROPS = [
 ];
 
 const PRESETS = {
-  size: [1, 2.5, 5, 12],
   opacity: [0.15, 0.4, 0.7, 1],
   smoothing: [0, 0.33, 0.66, 1],
 };
 
 // Keyboard step per arrow press.
-const KEY_STEP = { size: 0.5, opacity: 0.05, smoothing: 0.05 };
+const KEY_STEP = { opacity: 0.05, smoothing: 0.05 };
 
 // Tool slots share a 270-degree sweep that starts at the lower left and ends
 // at the lower right. The step follows the slot count, so adding a tool
@@ -115,6 +120,7 @@ const TOOL_SLOTS = [
   { id: "rect", label: "Rect", kbd: "R", icon: "rect", hasMedium: true },
   { id: "circle", label: "Circle", kbd: "C", icon: "circle", hasMedium: true },
   { id: "pen", label: "Pen", kbd: "P", icon: "pen", hasMedium: true },
+  { id: "text", label: "Text", kbd: "T", icon: "text", hasMedium: false },
   { id: "nudge", label: "Nudge", kbd: "N", icon: "nudge", hasMedium: false },
   { id: "slice", label: "Slice", kbd: "S", icon: "slice", hasMedium: false },
   { id: "eraser", label: "Eraser", kbd: "E", icon: "eraser", hasMedium: false },
@@ -135,7 +141,14 @@ let dragging = null;     // "size" | "opacity" | "smoothing" | "move" | null
 let pressCandidate = null; // pending press that may become a drag or a click
 let moveOffset = { x: 0, y: 0 };
 let movePointerId = null;  // finger or pen that is dragging the wheel
+let dragStartPos = null;   // wheel origin when a move drag began
+let collapsed = false;
+let restorePos = null;
+let dockAnchor = null;
+let dock = null;
+let dockEdge = "left";
 let pendingStyleCmd = null;
+let pendingTextCmd = null;
 let openPopoverKind = null; // "medium" | "size" | "opacity" | "smoothing" | null
 let popoverPinned = false;  // true after a click; hover-peek leaves it transient
 let hoverTimer = null;
@@ -145,11 +158,30 @@ const propEls = {}; // key -> { group, track, fill, handle, readout }
 
 // --- Value mapping ---------------------------------------------------------
 
+function usesTextSize() {
+  if (isEditingText()) return true;
+  if (activeBrush.toolType === "text") return true;
+  return singleSelection()?.type === "text";
+}
+
+function sizeRange() {
+  if (activeBrush.toolType === "eraser") return ERASER_RANGE;
+  if (usesTextSize()) return TEXT_SIZE_RANGE;
+  return widthRangeFor(currentStyle().medium);
+}
+
 function widthToT(w) {
-  return clamp01(Math.sqrt((w - MIN_WIDTH) / (MAX_WIDTH - MIN_WIDTH)));
+  const { min, max } = sizeRange();
+  const span = Math.max(1e-6, max - min);
+  return clamp01(Math.sqrt(Math.max(0, (w - min) / span)));
 }
 function tToWidth(t) {
-  return MIN_WIDTH + t * t * (MAX_WIDTH - MIN_WIDTH);
+  const { min, max } = sizeRange();
+  return min + t * t * (max - min);
+}
+
+function presetList(kind) {
+  return kind === "size" ? sizeRange().presets : PRESETS[kind];
 }
 function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 function roundWidth(w) { return Math.round(w * 10) / 10; }
@@ -203,6 +235,11 @@ const ICONS = {
   pen: [
     { tag: "path", d: "M4 20 L6.4 14.2 L16.2 4.4 L19.6 7.8 L9.8 17.6 Z" },
     { tag: "path", d: "M14.4 6.2 L17.8 9.6" },
+  ],
+  text: [
+    { tag: "path", d: "M5 5.5 H19" },
+    { tag: "path", d: "M12 5.5 V18.5" },
+    { tag: "path", d: "M8 18.5 H16" },
   ],
   nudge: [
     { tag: "path", d: "M3 16.5 C 7.5 7.5, 16.5 7.5, 21 16.5" },
@@ -275,7 +312,15 @@ function currentStyle() {
   return el ? el.style : activeBrush;
 }
 
-function beginStyleEdit() {
+function beginStyleEdit(key) {
+  if (key === "size" && usesTextSize()) {
+    const el = singleSelection();
+    if (!isEditingText() && activeBrush.toolType !== "text" && el?.type === "text") {
+      pendingTextCmd = new TransformCommand();
+      pendingTextCmd.begin([el]);
+    }
+    return;
+  }
   const el = singleSelection();
   if (el) {
     pendingStyleCmd = new StyleCommand();
@@ -298,6 +343,17 @@ function commitStyleEdit() {
     if (pendingStyleCmd.changed()) appRef.history.push(pendingStyleCmd);
   }
   pendingStyleCmd = null;
+  if (pendingTextCmd) {
+    const text = singleSelection();
+    if (text?.type === "text") {
+      pendingTextCmd.end([text]);
+      const rec = pendingTextCmd.records[0];
+      if (rec?.before && rec.after && rec.before.size !== rec.after.size) {
+        appRef.history.push(pendingTextCmd);
+      }
+    }
+    pendingTextCmd = null;
+  }
 }
 
 // --- Property values ---------------------------------------------------------
@@ -306,6 +362,12 @@ function commitStyleEdit() {
 
 function propValue(key) {
   const st = currentStyle();
+  if (key === "size" && activeBrush.toolType === "eraser") {
+    return activeBrush.eraserWidth ?? ERASER_RANGE.min;
+  }
+  if (key === "size" && usesTextSize()) {
+    return displayedTextSize(singleSelection(), activeBrush.toolType === "text");
+  }
   if (key === "size") return st.strokeWidth ?? activeBrush.strokeWidth;
   if (key === "opacity") return st.opacity ?? 1;
   return activeBrush.smoothing ?? 0;
@@ -329,13 +391,29 @@ function propText(key) {
 }
 
 function setPropFromT(key, t) {
-  if (key === "size") applyStylePatch({ strokeWidth: roundWidth(tToWidth(clamp01(t))) });
+  if (key === "size") setSize(roundWidth(tToWidth(clamp01(t))));
   else if (key === "opacity") applyStylePatch({ opacity: clamp01(t) });
   else setBrush({ smoothing: clamp01(t) });
 }
 
+function setSize(width) {
+  if (activeBrush.toolType === "eraser") setBrush({ eraserWidth: Math.round(width) });
+  else if (usesTextSize()) {
+    const size = setTextSize(width);
+    const el = singleSelection();
+    if (!isEditingText() && activeBrush.toolType !== "text" && el?.type === "text") {
+      el.size = size;
+      touchElement(el);
+    }
+  }
+  else applyStylePatch({ strokeWidth: width });
+}
+
 function setPropValue(key, v) {
-  if (key === "size") applyStylePatch({ strokeWidth: roundWidth(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, v))) });
+  if (key === "size") {
+    const { min, max } = sizeRange();
+    setSize(roundWidth(Math.max(min, Math.min(max, v))));
+  }
   else if (key === "opacity") applyStylePatch({ opacity: clamp01(v) });
   else setBrush({ smoothing: clamp01(v) });
 }
@@ -350,6 +428,7 @@ function isUndoable(key) { return key !== "smoothing"; }
  * itself is kept, so switching back to an outline medium restores the weight.
  */
 function isPropInert(key) {
+  if (key === "size" && (activeBrush.toolType === "eraser" || usesTextSize())) return false;
   return key === "size" && isFilledMedium(currentStyle().medium);
 }
 
@@ -654,16 +733,11 @@ function buildPropRing() {
 
     // Preset detents, notched across the groove floor so they stay readable
     // on both the travelled and untravelled side of the handle.
-    const notch = PROP_W / 2 - 0.6;
-    for (const p of PRESETS[def.key]) {
-      const t = def.key === "size" ? widthToT(p) : p;
-      const deg = arcValueToDeg(def.arc, t);
-      const a = polar(deg, PROP_R - notch);
-      const b = polar(deg, PROP_R + notch);
-      group.appendChild(svgEl("line", {
-        x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: "sw-prop-tick",
-      }));
-    }
+    const ticks = presetList(def.key).map(() => {
+      const line = svgEl("line", { class: "sw-prop-tick" });
+      group.appendChild(line);
+      return line;
+    });
 
     const handle = buildKnob();
     group.appendChild(handle);
@@ -714,12 +788,12 @@ function buildPropRing() {
 
     group.addEventListener("keydown", (e) => {
       if (isPropInert(def.key)) return;
-      const step = KEY_STEP[def.key];
+      const step = def.key === "size" ? sizeRange().step : KEY_STEP[def.key];
       let next = null;
       if (e.key === "ArrowUp" || e.key === "ArrowRight") next = propValue(def.key) + step;
       else if (e.key === "ArrowDown" || e.key === "ArrowLeft") next = propValue(def.key) - step;
-      else if (e.key === "Home") next = def.key === "size" ? MIN_WIDTH : 0;
-      else if (e.key === "End") next = def.key === "size" ? MAX_WIDTH : 1;
+      else if (e.key === "Home") next = def.key === "size" ? sizeRange().min : 0;
+      else if (e.key === "End") next = def.key === "size" ? sizeRange().max : 1;
       else if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         e.stopPropagation();
@@ -729,14 +803,14 @@ function buildPropRing() {
       if (next === null) return;
       e.preventDefault();
       e.stopPropagation();
-      if (isUndoable(def.key)) beginStyleEdit();
+      if (isUndoable(def.key)) beginStyleEdit(def.key);
       setPropValue(def.key, next);
       if (isUndoable(def.key)) commitStyleEdit();
       syncUi(true);
     });
 
     g.appendChild(group);
-    propEls[def.key] = { group, track, fill, handle, readout, arc: def.arc };
+    propEls[def.key] = { group, track, fill, handle, readout, arc: def.arc, ticks };
   }
   return g;
 }
@@ -782,9 +856,13 @@ function buildDom() {
   svg.appendChild(buildPropRing());
   root.appendChild(svg);
   root.appendChild(buildHub());
+  root.appendChild(buildCollapseButton());
 
   document.body.appendChild(root);
+  dock = buildDockButton();
+  document.body.appendChild(dock);
   restorePosition();
+  clampIntoViewport();
 
   // Reposition drag on the tool band. Pointer events so a finger or a pen
   // can move the wheel; a mouse still arrives as a pointer too.
@@ -794,6 +872,7 @@ function buildDom() {
     dragging = "move";
     movePointerId = e.pointerId;
     const rect = root.getBoundingClientRect();
+    dragStartPos = { x: rect.left, y: rect.top };
     moveOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     closePopover();
     hideTooltip();
@@ -853,7 +932,8 @@ function buildDom() {
   subscribeStyle(() => syncUi(true));
 
   window.addEventListener("resize", () => {
-    clampIntoViewport();
+    if (collapsed) placeDock(dockEdge);
+    else clampIntoViewport();
     if (popover) positionPopover();
   });
 }
@@ -867,16 +947,21 @@ function onWindowMouseMove(e) {
     dragging = pressCandidate.key;
     closePopover();
     hideTooltip();
-    if (isUndoable(dragging)) beginStyleEdit();
+    if (isUndoable(dragging)) beginStyleEdit(dragging);
     root.classList.add("dragging");
   }
   if (!dragging) return;
   if (dragging === "move") {
-    const x = Math.max(0, Math.min(e.clientX - moveOffset.x, window.innerWidth - SIZE));
-    const y = Math.max(0, Math.min(e.clientY - moveOffset.y, window.innerHeight - SIZE));
-    root.style.left = `${x}px`;
-    root.style.top = `${y}px`;
-    root.style.transform = "none";
+    const rawX = e.clientX - moveOffset.x;
+    const rawY = e.clientY - moveOffset.y;
+    // Pushing past the edge it is already stopped against docks the wheel.
+    // A stroke never does this; only this explicit drag does.
+    const edge = overdragEdge(rawX, rawY);
+    if (edge) {
+      collapseWheel(edge);
+      return;
+    }
+    placeWheel(rawX, rawY);
   } else {
     updatePropFromPointer(e);
   }
@@ -919,21 +1004,212 @@ function restorePosition() {
   if (!saved) return;
   try {
     const { x, y } = JSON.parse(saved);
-    root.style.left = `${Math.max(0, Math.min(x, window.innerWidth - SIZE))}px`;
-    root.style.top = `${Math.max(0, Math.min(y, window.innerHeight - SIZE))}px`;
-    root.style.transform = "none";
+    placeWheel(x, y);
   } catch { /* ignore corrupt state */ }
 }
 
-/** Keep the wheel fully on screen after a viewport change. */
-function clampIntoViewport() {
-  const rect = root.getBoundingClientRect();
-  const x = Math.max(0, Math.min(rect.left, Math.max(0, window.innerWidth - SIZE)));
-  const y = Math.max(0, Math.min(rect.top, Math.max(0, window.innerHeight - SIZE)));
-  if (x === rect.left && y === rect.top) return;
-  root.style.left = `${x}px`;
-  root.style.top = `${y}px`;
+/** Top-right corner reserved for the settings gear, in CSS pixels. */
+const GEAR_CLEAR = 56;
+/** Top-left corner reserved for the Home control. */
+const HOME_CLEAR_X = 96;
+const HOME_CLEAR_Y = 64;
+
+function wheelLimits() {
+  return {
+    maxX: Math.max(0, window.innerWidth - SIZE),
+    maxY: Math.max(0, window.innerHeight - SIZE - COLLAPSE_OVERHANG),
+  };
+}
+
+/**
+ * Keep the wheel on screen, and keep its disc out from under the settings
+ * gear. A small window otherwise slides the wheel into that corner and the
+ * gear disappears into the dark body.
+ */
+function fitWheel(x, y) {
+  const { maxX, maxY } = wheelLimits();
+  x = Math.max(0, Math.min(x, maxX));
+  y = Math.max(0, Math.min(y, maxY));
+
+  const gearLeft = window.innerWidth - GEAR_CLEAR;
+  const overlapsGear = x + SIZE > gearLeft && y < GEAR_CLEAR;
+  if (overlapsGear) {
+    const below = GEAR_CLEAR;
+    const leftOf = gearLeft - SIZE;
+    if (below <= maxY) y = Math.max(y, below);
+    else if (leftOf >= 0) x = Math.min(x, leftOf);
+  }
+
+  const overlapsHome = x < HOME_CLEAR_X && y < HOME_CLEAR_Y;
+  if (overlapsHome) {
+    if (HOME_CLEAR_Y <= maxY) y = Math.max(y, HOME_CLEAR_Y);
+    else if (HOME_CLEAR_X <= maxX) x = Math.max(x, HOME_CLEAR_X);
+  }
+  return { x, y };
+}
+
+function placeWheel(x, y) {
+  const fitted = fitWheel(x, y);
+  root.style.left = `${fitted.x}px`;
+  root.style.top = `${fitted.y}px`;
   root.style.transform = "none";
+  updateCollapseEdge();
+}
+
+/** Keep the wheel fully on screen after a viewport change.
+ *  Home hides the wheel with display:none, and a hidden box reports a
+ *  zero rect. Clamping that would pin the wheel to the corner. */
+function clampIntoViewport() {
+  if (!root || collapsed) return;
+  const rect = root.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  const fitted = fitWheel(rect.left, rect.top);
+  if (Math.abs(fitted.x - rect.left) >= 0.5 || Math.abs(fitted.y - rect.top) >= 0.5) {
+    root.style.left = `${fitted.x}px`;
+    root.style.top = `${fitted.y}px`;
+    root.style.transform = "none";
+  }
+  updateCollapseEdge();
+}
+
+function nearestEdge(rect) {
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const options = [
+    ["left", cx],
+    ["right", window.innerWidth - cx],
+    ["top", cy],
+    ["bottom", window.innerHeight - cy],
+  ];
+  options.sort((a, b) => a[1] - b[1]);
+  return options[0][0];
+}
+
+function updateCollapseEdge() {
+  if (!root || collapsed) return;
+  const rect = root.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  root.dataset.edge = nearestEdge(rect);
+}
+
+function overdragEdge(rawX, rawY) {
+  const { maxX, maxY } = wheelLimits();
+  const options = [
+    ["left", -rawX],
+    ["right", rawX - maxX],
+    ["top", -rawY],
+    ["bottom", rawY - maxY],
+  ];
+  options.sort((a, b) => b[1] - a[1]);
+  return options[0][1] > COLLAPSE_PUSH ? options[0][0] : null;
+}
+
+function chevronSvg() {
+  const icon = document.createElementNS(SVG_NS, "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("width", "18");
+  icon.setAttribute("height", "18");
+  icon.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", "M7 10 L12 15 L17 10");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.7");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  icon.appendChild(path);
+  return icon;
+}
+
+function buildCollapseButton() {
+  const btn = document.createElement("button");
+  btn.id = "wheelCollapse";
+  btn.type = "button";
+  btn.title = "Hide tools";
+  btn.setAttribute("aria-label", "Hide tools");
+  btn.appendChild(chevronSvg());
+  btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+  btn.addEventListener("mousedown", (e) => e.stopPropagation());
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    collapseWheel(nearestEdge(root.getBoundingClientRect()));
+  });
+  return btn;
+}
+
+function buildDockButton() {
+  const btn = document.createElement("button");
+  btn.id = "wheelDock";
+  btn.type = "button";
+  btn.hidden = true;
+  btn.title = "Show tools";
+  btn.setAttribute("aria-label", "Show tools");
+  btn.appendChild(chevronSvg());
+  btn.addEventListener("click", () => expandWheel());
+  return btn;
+}
+
+function placeDock(edge) {
+  if (!dock) return;
+  const size = DOCK_SIZE;
+  const inset = 12;
+  const anchor = dockAnchor || restorePos || { x: 0, y: 0 };
+  const cx = anchor.x + SIZE / 2;
+  const cy = anchor.y + SIZE / 2;
+  const maxX = Math.max(inset, window.innerWidth - size - inset);
+  const maxY = Math.max(inset, window.innerHeight - size - inset);
+  let x;
+  let y;
+  if (edge === "left" || edge === "right") {
+    x = edge === "left" ? inset : window.innerWidth - size - inset;
+    y = Math.min(maxY, Math.max(HOME_CLEAR_Y, cy - size / 2));
+  } else if (edge === "top") {
+    y = inset;
+    x = Math.min(window.innerWidth - size - GEAR_CLEAR, Math.max(HOME_CLEAR_X, cx - size / 2));
+  } else {
+    y = window.innerHeight - size - inset;
+    x = Math.min(maxX, Math.max(inset, cx - size / 2));
+  }
+  dock.style.left = `${x}px`;
+  dock.style.top = `${y}px`;
+  dock.dataset.edge = edge;
+}
+
+function collapseWheel(edge) {
+  if (collapsed || !root) return;
+  const fromDrag = dragging === "move" && dragStartPos;
+  const rect = root.getBoundingClientRect();
+  dockAnchor = { x: rect.left, y: rect.top };
+  restorePos = fromDrag
+    ? { x: dragStartPos.x, y: dragStartPos.y }
+    : dockAnchor;
+  dragging = null;
+  pressCandidate = null;
+  movePointerId = null;
+  dragStartPos = null;
+  root.classList.remove("dragging");
+  closePopover();
+  hideTooltip();
+  if (isColorPickerOpen()) closeColorLayer();
+  if (isEyedropperActive()) stopEyedropper();
+  collapsed = true;
+  dockEdge = edge;
+  root.classList.add("is-collapsed");
+  root.inert = true;
+  root.setAttribute("aria-hidden", "true");
+  placeDock(edge);
+  dock.hidden = false;
+}
+
+function expandWheel() {
+  if (!root) return;
+  collapsed = false;
+  root.classList.remove("is-collapsed");
+  root.inert = false;
+  root.removeAttribute("aria-hidden");
+  if (dock) dock.hidden = true;
+  if (restorePos) placeWheel(restorePos.x, restorePos.y);
+  else updateCollapseEdge();
 }
 
 // The color overlay reuses the ring space around the hub, so the wheel's own
@@ -966,6 +1242,7 @@ function ensureRoomForRings() {
   root.style.left = `${ncx - rect.width / 2}px`;
   root.style.top = `${ncy - rect.height / 2}px`;
   root.style.transform = "none";
+  updateCollapseEdge();
   savePosition();
 }
 
@@ -1080,7 +1357,17 @@ function buildMediumPopover() {
 
     btn.addEventListener("click", () => {
       beginStyleEdit();
-      applyStylePatch({ medium: m.id });
+      const patch = { medium: m.id };
+      // A fill keeps the previous weight, since the size ring does nothing
+      // there. Any real tip snaps into that utensil's pixel range.
+      if (!isFilledMedium(m.id)) {
+        const { min, max } = widthRangeFor(m.id);
+        const widthNow = usesTextSize()
+          ? (currentStyle().strokeWidth ?? activeBrush.strokeWidth)
+          : propValue("size");
+        patch.strokeWidth = roundWidth(Math.max(min, Math.min(max, widthNow)));
+      }
+      applyStylePatch(patch);
       commitStyleEdit();
       syncUi(true);
       closePopover();
@@ -1114,7 +1401,7 @@ function buildPropPopover(kind) {
   slider.addEventListener("input", () => {
     if (!sliderEditing) {
       sliderEditing = true;
-      if (isUndoable(kind)) beginStyleEdit();
+      if (isUndoable(kind)) beginStyleEdit(kind);
     }
     setPropFromT(kind, slider.value / 100);
     value.textContent = propText(kind);
@@ -1131,13 +1418,13 @@ function buildPropPopover(kind) {
 
   const presetRow = document.createElement("div");
   presetRow.className = "wheel-preset-row";
-  for (const p of PRESETS[kind]) {
+  for (const p of presetList(kind)) {
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = kind === "size" ? `${p}` : `${Math.round(p * 100)}%`;
     b.classList.toggle("active", Math.abs(propValue(kind) - p) < 1e-6);
     b.addEventListener("click", () => {
-      if (isUndoable(kind)) beginStyleEdit();
+      if (isUndoable(kind)) beginStyleEdit(kind);
       setPropValue(kind, p);
       if (isUndoable(kind)) commitStyleEdit();
       slider.value = Math.round(propT(kind) * 100);
@@ -1237,12 +1524,31 @@ function accentFrom(color) {
   };
 }
 
+function placeTicks(def) {
+  const els = propEls[def.key];
+  if (!els || !els.ticks) return;
+  const notch = PROP_W / 2 - 0.6;
+  presetList(def.key).forEach((p, i) => {
+    const line = els.ticks[i];
+    if (!line) return;
+    const t = def.key === "size" ? widthToT(p) : p;
+    const deg = arcValueToDeg(def.arc, t);
+    const a = polar(deg, PROP_R - notch);
+    const b = polar(deg, PROP_R + notch);
+    line.setAttribute("x1", a.x);
+    line.setAttribute("y1", a.y);
+    line.setAttribute("x2", b.x);
+    line.setAttribute("y2", b.y);
+  });
+}
+
 function syncUi(force) {
   if (!root) return;
   const st = currentStyle();
   const key = [
     st.stroke, st.strokeWidth, st.opacity, st.medium || "pen",
-    activeBrush.toolType, activeBrush.smoothing, singleSelection()?.id || "",
+    activeBrush.toolType, activeBrush.eraserWidth, activeBrush.smoothing, singleSelection()?.id || "",
+    usesTextSize() ? displayedTextSize(singleSelection(), activeBrush.toolType === "text") : "",
   ].join("|");
   if (!force && key === lastSynced) return;
   lastSynced = key;
@@ -1263,6 +1569,7 @@ function syncUi(force) {
     els.group.setAttribute("aria-disabled", String(inert));
     els.group.setAttribute("aria-valuenow", String(Math.round(t * 100)));
     els.group.setAttribute("aria-valuetext", propText(def.key));
+    placeTicks(def);
   }
 
   // Tool ring active highlight.
@@ -1322,6 +1629,19 @@ function relativeLuminance(hex) {
 }
 
 // --- Public API ------------------------------------------------------------------
+
+/** Close transient layers and show the wheel. Used when a drawing opens. */
+export function resetStyleWheel() {
+  if (!root) return;
+  closePopover();
+  hideTooltip();
+  if (isColorPickerOpen()) closeColorLayer();
+  if (isEyedropperActive()) stopEyedropper();
+  if (collapsed) expandWheel();
+  // New drawings and a fresh load show the wheel. Measure only once it
+  // is on screen — enterDocument drops the home class before calling this.
+  clampIntoViewport();
+}
 
 export function initStyleWheel(app) {
   appRef = app;

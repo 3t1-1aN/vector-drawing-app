@@ -3,8 +3,9 @@
 // Never draws over ink as a replacement; only augments.
 
 import { worldToScreen } from "../core/view.js";
+import { typeFont } from "../render/text-style.js";
 
-const FONT = "11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+const FONT = typeFont(13);
 const FG = "rgba(220, 230, 240, 0.92)";
 const BG = "rgba(12, 14, 18, 0.55)";
 const CHIP_FG = "rgba(170, 210, 255, 0.95)";

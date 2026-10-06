@@ -2,6 +2,10 @@
 // Real-world drawing scale: maps world units to a chosen engineering unit
 // (m, mm, cm, ft, in). `unitsPerWorldUnit` says how many of the chosen
 // unit one world unit represents (e.g. unit 'm', scale 1 => 1 wu = 1 m).
+// `scaleSettings` is the open document's scale; bindScale() points it at
+// the record that document owns.
+
+import { bindable } from "../core/bindable.js";
 
 export const UNITS = {
   m: { label: "m", factor: 1.0 },
@@ -11,12 +15,18 @@ export const UNITS = {
   in: { label: "in", factor: 39.3701 },
 };
 
-export const scaleSettings = {
-  unit: "m",
-  unitsPerWorldUnit: 1.0,
-  // 'cad' = extension-line annotations, 'labels' = centroid pills, 'off' = none.
-  dimensionMode: "cad",
-};
+export function createScaleSettings() {
+  return {
+    unit: "m",
+    unitsPerWorldUnit: 1.0,
+    // 'cad' = extension-line annotations, 'labels' = centroid pills, 'off' = none.
+    dimensionMode: "cad",
+  };
+}
+
+const scaleBinding = bindable(createScaleSettings());
+export const scaleSettings = scaleBinding.proxy;
+export const bindScale = scaleBinding.bind;
 
 export function setUnit(unit) {
   if (UNITS[unit]) scaleSettings.unit = unit;

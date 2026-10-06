@@ -12,14 +12,21 @@
 // is identical either way, nothing is discarded by switching, and a drawing
 // made in one mode opens fine in the other. What changes is which controls
 // the panel offers and which overlays the canvas draws.
+// `workspace` is the open document's mode; bindWorkspace() points it there.
+
+import { bindable } from "../core/bindable.js";
 
 // draw     -- paper and brushes
 // engineer -- adds units, dimensions, artboards and the scale bar
 export const WORKSPACE_MODES = ["draw", "engineer"];
 
-export const workspace = {
-  mode: "draw",
-};
+export function createWorkspaceState() {
+  return { mode: "draw" };
+}
+
+const workspaceBinding = bindable(createWorkspaceState());
+export const workspace = workspaceBinding.proxy;
+export const bindWorkspace = workspaceBinding.bind;
 
 /** True when the measurement layer and its controls should be present. */
 export function isEngineering() {

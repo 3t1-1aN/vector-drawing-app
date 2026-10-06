@@ -4,17 +4,57 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vector Drawing App — Concepts-like</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./css/app.css" />
   <link rel="stylesheet" href="./css/style-wheel.css" />
 </head>
-<body>
+<body class="is-home">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="ink" x="-1%" y="-1%" width="102%" height="102%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="11" result="n"/>
+      <feDisplacementMap id="fDisp" in="SourceGraphic" in2="n" scale="0.5" xChannelSelector="R" yChannelSelector="G" result="d0"/>
+      <feGaussianBlur id="fBlur" in="d0" stdDeviation="0.08" result="d"/>
+      <feColorMatrix id="fAlpha" in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.35 0 0 0 0.9" result="a"/>
+      <feComposite in="d" in2="a" operator="in"/>
+    </filter>
+    <filter id="typeink" x="-2%" y="-8%" width="104%" height="116%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="3" seed="4" result="n"/>
+      <feDisplacementMap id="tDisp" in="SourceGraphic" in2="n" scale="1.2" xChannelSelector="R" yChannelSelector="G" result="d0"/>
+      <feGaussianBlur in="d0" stdDeviation="0.25" result="d"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.06 0.5" numOctaves="2" seed="9" result="n2"/>
+      <feColorMatrix id="tA1" in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.3 0 0 0 0.3" result="a1"/>
+      <feColorMatrix id="tA2" in="n2" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0.5" result="a2"/>
+      <feComposite in="d" in2="a1" operator="in" result="e"/>
+      <feComposite in="e" in2="a2" operator="in"/>
+    </filter>
+  </svg>
   <canvas id="stage"></canvas>
+
+  <button id="homeBack" type="button" title="Home">Home</button>
+
+  <div id="home">
+    <div class="home-card">
+      <p class="home-kicker">New drawing</p>
+      <div class="home-choices">
+        <button type="button" id="homeInfinite" class="home-choice">
+          <span class="home-choice-title">Infinite note</span>
+          <span class="home-choice-note">An open canvas. Pan and zoom without a page edge.</span>
+        </button>
+        <button type="button" id="homeNotebook" class="home-choice">
+          <span class="home-choice-title">Notebook</span>
+          <span class="home-choice-note">One A4 page. Zoom into the sheet; the view stays on the page.</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Workspace panel. Collapsible so the hub stays primary. The mode
        switch at the top decides how much of it exists: Draw carries paper,
        grid and project, Engineer adds the measurement stack. -->
-  <button id="panelToggle" aria-label="Toggle settings panel" aria-expanded="false" title="Settings">⚙</button>
-  <div id="panel" class="collapsed">
+  <button id="panelToggle" aria-label="Toggle settings panel" aria-expanded="true" title="Settings">⚙</button>
+  <div id="panel">
     <div id="modeSwitch" class="segmented" role="radiogroup" aria-label="Workspace">
       <button type="button" data-mode="draw" role="radio" aria-checked="true"
               title="Paper and brushes">Draw</button>
@@ -39,7 +79,7 @@
 
     <div class="section-head">
       <h2 id="gridHeading">Grid</h2>
-      <button id="gridToggle" class="switch" role="switch" aria-pressed="true"
+      <button id="gridToggle" class="switch" role="switch" aria-pressed="false"
               aria-labelledby="gridHeading" title="Show grid"><span></span></button>
     </div>
     <div id="gridPatterns" class="pattern-row"></div>

@@ -17,8 +17,10 @@
 
 import { getRectCorners } from "../scene/element.js";
 import { getBrushPreset, TIP_FILL } from "./presets.js";
-import { maxTipRadius, rasterizeStroke } from "./engine.js";
+import { maskPad, rasterizeStroke } from "./engine.js";
+import { graphiteReach, rasterizeGraphite } from "./graphite.js";
 import { elementRev } from "../render/ink-rev.js";
+import { isDarkBackground } from "../workspace/appearance.js";
 
 // Rasterises allowed per frame once an entry already exists. A brand new
 // stroke always renders immediately -- it has nothing stale to fall back on.
@@ -173,7 +175,9 @@ function splineSlack(points, preset, exact) {
  */
 function layout(el, points, preset, scale, dpr, exact) {
   const baseWidth = tipWidth(el, preset, dpr);
-  const padWorld = (maxTipRadius(preset, baseWidth) + 2) / scale
+  const padWorld = (preset.id === "pencil"
+    ? graphiteReach(baseWidth, scale)
+    : maskPad(preset, baseWidth, scale) / scale)
                  + splineSlack(points, preset, exact);
   const b = boundsOf(points);
   if (!isFinite(b.minX)) return null;
@@ -200,6 +204,9 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
   const scale = view.zoom * dpr;
   const alpha = Math.max(0, Math.min(1, (st.opacity ?? 1) * preset.alphaMul * alphaScale));
   if (alpha <= 0.002) return;
+  // The sheet multiplies graphite into the paper. On a dark sheet that
+  // just swallows the mark, so it is painted on instead.
+  const op = preset.id === "pencil" && !isDarkBackground() ? "multiply" : null;
 
   // Unchanged stroke at this zoom: the bitmap is already right. Skip the
   // polyline, the signature, and the layout. A page of drawings then costs
@@ -210,7 +217,7 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
     const hit = entries.get(el.id);
     if (hit && hit.elRev === elRev && hit.scale === scale && hit.raster) {
       hit.frame = frame;
-      blit(ctx, hit.raster, hit.box, hit.scale, alpha);
+      blit(ctx, hit.raster, hit.box, hit.scale, alpha, op);
       return;
     }
   }
@@ -235,8 +242,17 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
   };
 
   if (!cache) {
+    // A freehand pencil grows by appending. Rebuilding it from the first
+    // point every frame is the stall while the hand is still down.
+    if (preset.id === "pencil") {
+      const raster = rasterizeGraphite(el.id, points, strokeOpts);
+      if (raster) {
+        blit(ctx, raster, { originX: raster.originX, originY: raster.originY }, scale, alpha, op);
+        return;
+      }
+    }
     const raster = rasterizeStroke(points, strokeOpts);
-    if (raster) blit(ctx, raster, box, scale, alpha);
+    if (raster) blit(ctx, raster, box, scale, alpha, op);
     return;
   }
 
@@ -245,7 +261,7 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
   if (entry && entry.sig === sig) {
     entry.frame = frame;
     entry.elRev = elementRev(el);
-    blit(ctx, entry.raster, entry.box, scale, alpha);
+    blit(ctx, entry.raster, entry.box, scale, alpha, op);
     return;
   }
 
@@ -253,8 +269,20 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
   // catches up, so zooming stays smooth instead of stalling on a full
   // re-rasterise of the whole scene.
   if (entry && budget <= 0) {
-    blit(ctx, entry.raster, entry.box, entry.scale, alpha);
+    blit(ctx, entry.raster, entry.box, entry.scale, alpha, op);
     return;
+  }
+
+  // Releasing the pencil, or the frame that caught the last samples, can
+  // extend the live canvas instead of rasterising the whole line again.
+  if (preset.id === "pencil") {
+    const raster = rasterizeGraphite(el.id, points, strokeOpts);
+    if (raster && raster.owned) {
+      rememberLive(el, points, scale, raster);
+      blit(ctx, raster, { originX: raster.originX, originY: raster.originY }, scale, alpha, op);
+      if (entry && !raster.extended) budget--;
+      return;
+    }
   }
 
   const raster = rasterizeStroke(points, strokeOpts);
@@ -292,15 +320,48 @@ export function drawBrushElement(ctx, el, view, { alphaScale = 1, cache = true }
   entry.frame = frame;
   evictIfNeeded();
 
-  blit(ctx, entry.raster, entry.box, scale, alpha);
+  blit(ctx, entry.raster, entry.box, scale, alpha, op);
+}
+
+/**
+ * Keep a finished live pencil so releasing it, or the next frame, blits
+ * the bitmap instead of walking the whole stroke again.
+ */
+function rememberLive(el, points, scale, raster) {
+  const sig = signature(el, points, scale);
+  const px = raster.canvas.width * raster.canvas.height;
+  let entry = entries.get(el.id);
+  if (!entry || entry.canvas !== raster.canvas) {
+    if (entry) cachedPx -= entry.w * entry.h;
+    entry = {
+      canvas: raster.canvas,
+      w: raster.canvas.width,
+      h: raster.canvas.height,
+      frame,
+    };
+    entries.set(el.id, entry);
+    cachedPx += px;
+    evictIfNeeded();
+  }
+  entry.sig = sig;
+  entry.scale = scale;
+  entry.elRev = elementRev(el);
+  entry.frame = frame;
+  entry.box = { originX: raster.originX, originY: raster.originY };
+  entry.raster = {
+    canvas: raster.canvas,
+    x: raster.x, y: raster.y, w: raster.w, h: raster.h,
+  };
 }
 
 /**
  * Place a raster sub-rect in world space. Drawn in world units so the
  * device-pixel mapping comes out 1:1 when `sourceScale` matches the view.
  */
-function blit(ctx, raster, box, sourceScale, alpha) {
+function blit(ctx, raster, box, sourceScale, alpha, composite) {
   const prevAlpha = ctx.globalAlpha;
+  const prevOp = ctx.globalCompositeOperation;
+  if (composite) ctx.globalCompositeOperation = composite;
   ctx.globalAlpha = alpha;
   const wx = box.originX + (raster.x || 0) / sourceScale;
   const wy = box.originY + (raster.y || 0) / sourceScale;
@@ -310,4 +371,5 @@ function blit(ctx, raster, box, sourceScale, alpha) {
     wx, wy, raster.w / sourceScale, raster.h / sourceScale,
   );
   ctx.globalAlpha = prevAlpha;
+  ctx.globalCompositeOperation = prevOp;
 }

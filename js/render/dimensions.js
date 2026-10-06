@@ -8,18 +8,18 @@ import { worldToScreen } from "../core/view.js";
 import { lineLength, rectSize, getRectCorners } from "../scene/element.js";
 import { formatLength } from "../precision/scale.js";
 import { getBackgroundBaseColor, isDarkBackground } from "../workspace/appearance.js";
+import { INK_COLOR, inkFont, useSheetText } from "./text-style.js";
 
-// Quiet slate, not a CAD blue. It has to sit on warm paper without shouting.
 function DIM_COLOR() {
-  return isDarkBackground() ? "rgba(198, 214, 232, 0.92)" : "rgba(62, 74, 96, 0.9)";
+  return isDarkBackground() ? "rgba(232, 229, 220, 0.92)" : INK_COLOR;
 }
 function EXT_COLOR() {
-  return isDarkBackground() ? "rgba(198, 214, 232, 0.42)" : "rgba(62, 74, 96, 0.36)";
+  return isDarkBackground() ? "rgba(232, 229, 220, 0.42)" : "rgba(46, 46, 46, 0.45)";
 }
 function PAPER() {
   return getBackgroundBaseColor() || (isDarkBackground() ? "#1e1e22" : "#f5f0e8");
 }
-const FONT = "500 11px ui-sans-serif, system-ui, sans-serif";
+const FONT_PX = 13;
 const OFFSET_PX = 18;
 const GAP_PX = 6;
 const OVERSHOOT_PX = 5;
@@ -80,7 +80,7 @@ function drawScreenDim(ctx, a, b, label, away) {
   ctx.moveTo(eb0.x, eb0.y); ctx.lineTo(eb1.x, eb1.y);
   ctx.stroke();
 
-  ctx.font = FONT;
+  ctx.font = inkFont(FONT_PX, 400);
   const textW = ctx.measureText(label).width;
   const alongX = (b2.x - a2.x) / len;
   const alongY = (b2.y - a2.y) / len;
@@ -120,8 +120,9 @@ function drawScreenDim(ctx, a, b, label, away) {
   ctx.lineWidth = 4;
   ctx.strokeStyle = PAPER();
   ctx.strokeText(label, tx, ty);
-  ctx.fillStyle = DIM_COLOR();
+  const restoreFont = useSheetText(ctx, { px: FONT_PX, weight: 400 });
   ctx.fillText(label, tx, ty);
+  restoreFont();
   ctx.restore();
 }
 

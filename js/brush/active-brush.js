@@ -8,9 +8,10 @@
 export const activeBrush = {
   stroke: "#2b2b30",
   strokeWidth: 2.0,
+  eraserWidth: 48,    // screen px; the eraser's own size, not the drawing tip
   opacity: 1.0,
   medium: "pen",      // brush preset id, see brush/presets.js
-  toolType: "line",   // select | line | rect | circle | pen | nudge | slice | eraser
+  toolType: "line",   // select | line | rect | circle | pen | text | nudge | slice | eraser
   smoothing: 0,       // 0..1, pen stroke smoothing
 };
 

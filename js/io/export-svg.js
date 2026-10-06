@@ -4,6 +4,8 @@
 // in world units; the SVG viewBox maps world space directly.
 
 import { getRectCorners } from "../scene/element.js";
+import { labelFrame } from "../render/text-frame.js";
+import { wrappedRows } from "../render/type-text.js";
 import { scaleSettings, UNITS } from "../precision/scale.js";
 import { getBrushPreset, isFilledMedium } from "../brush/presets.js";
 
@@ -38,30 +40,61 @@ function brushSvgAttrs(el) {
   return attrs;
 }
 
+function labelSvg(el) {
+  if (!el.label?.text?.trim()) return "";
+  const frame = labelFrame(el);
+  if (!frame) return "";
+  const size = el.label.size || 17;
+  const rows = wrappedRows({ text: el.label.text, size }, frame.width);
+  const lineH = size * 1.6;
+  const fill = el.style?.stroke || "#2b2926";
+  const y0 = frame.cy - ((rows.length - 1) * lineH) / 2;
+  const deg = (frame.angle || 0) * 180 / Math.PI;
+  const spin = Math.abs(deg) > 0.05
+    ? ` transform="rotate(${deg.toFixed(2)} ${frame.cx.toFixed(2)} ${frame.cy.toFixed(2)})"`
+    : "";
+  const tspans = rows.map((row, i) =>
+    `<tspan x="${frame.cx.toFixed(2)}" dy="${i === 0 ? 0 : lineH.toFixed(2)}">${esc(row) || " "}</tspan>`,
+  ).join("");
+  return `  <text${spin} y="${y0.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" font-family="Special Elite, Courier New, monospace" font-size="${size}" fill="${fill}">${tspans}</text>`;
+}
+
 function elementToSvg(el) {
   const common = brushSvgAttrs(el);
+  let body = "";
   switch (el.type) {
     case "line":
-      return `  <line ${common} x1="${el.startX}" y1="${el.startY}" x2="${el.endX}" y2="${el.endY}" />`;
+      body = `  <line ${common} x1="${el.startX}" y1="${el.startY}" x2="${el.endX}" y2="${el.endY}" />`;
+      break;
     case "rect":
     case "square": {
       const c = getRectCorners(el);
-      return `  <polygon ${common} points="${ptsToStr(c)}" />`;
+      body = `  <polygon ${common} points="${ptsToStr(c)}" />`;
+      break;
     }
     case "circle":
-      return `  <circle ${common} cx="${el.cx}" cy="${el.cy}" r="${el.r}" />`;
+      body = `  <circle ${common} cx="${el.cx}" cy="${el.cy}" r="${el.r}" />`;
+      break;
     case "triangle":
-      return `  <polygon ${common} points="${ptsToStr(el.corners)}" />`;
+      body = `  <polygon ${common} points="${ptsToStr(el.corners)}" />`;
+      break;
+    case "text":
+      body = `  <text x="${el.x.toFixed(3)}" y="${el.y.toFixed(3)}" font-family="Special Elite, Courier New, monospace" font-size="${el.size || 17}" fill="${el.style?.stroke || "#2b2926"}" dominant-baseline="hanging">${esc(el.text || "")}</text>`;
+      break;
     case "path":
-      if (el.points.length < 2) return "";
-      const d = "M " + el.points.map((p) => `${p.x.toFixed(3)} ${p.y.toFixed(3)}`).join(" L ");
-      // The renderer closes a fill back to its start; the export has to spell
-      // that edge out or the shape opens up outside the app.
-      const close = isFilledMedium(el.style.medium) ? " Z" : "";
-      return `  <path ${common} d="${d}${close}" />`;
+      if (el.points.length >= 2) {
+        const d = "M " + el.points.map((p) => `${p.x.toFixed(3)} ${p.y.toFixed(3)}`).join(" L ");
+        // The renderer closes a fill back to its start; the export has to spell
+        // that edge out or the shape opens up outside the app.
+        const close = isFilledMedium(el.style.medium) ? " Z" : "";
+        body = `  <path ${common} d="${d}${close}" />`;
+      }
+      break;
     default:
-      return "";
+      break;
   }
+  const label = labelSvg(el);
+  return [body, label].filter(Boolean).join("\n");
 }
 
 /**

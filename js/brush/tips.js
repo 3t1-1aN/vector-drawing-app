@@ -254,4 +254,53 @@ export function paperToothPeriod() {
   return toothPeriod;
 }
 
+// --- Graphite rim ----------------------------------------------------------
+// The sheet test deposits graphite only where tooth clears a threshold, and
+// that threshold is hardest at the rim. A smooth falloff scaled by grain
+// keeps a perfect outline; this field is what the rim is tested against.
+
+function hash2(ix, iy) {
+  const n = Math.sin(ix * 127.1 + iy * 311.7) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+function valueNoise2(x, y) {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const a = hash2(ix, iy);
+  const b = hash2(ix + 1, iy);
+  const c = hash2(ix, iy + 1);
+  const d = hash2(ix + 1, iy + 1);
+  return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+}
+
+/** 0..1 tooth at a world-pixel position. Same shape as the sheet-test pencil. */
+export function graphiteTooth(x, y) {
+  const coarse =
+    valueNoise2(x / 1.4, y / 1.4) * 0.4 +
+    valueNoise2(x / 3.1 + 17, y / 3.1 + 17) * 0.3 +
+    valueNoise2(x / 0.9 + 41, y / 0.9 + 41) * 0.2 +
+    valueNoise2(x * 0.3 + 5, y * 1.1 + 5) * 0.25 +
+    valueNoise2(x / 8 + 3, y / 8 + 3) * 0.2;
+  return (coarse
+    + valueNoise2(x / 0.55 + 9, y / 0.55 + 9) * 0.3
+    + hash2(Math.floor(x) * 1.7, Math.floor(y) * 2.3) * 0.45) / 2.1;
+}
+
+/** World-locked offset in -1..1, used to wobble a pencil's outline. */
+export function graphiteWarp(x, y, out) {
+  const dx = (valueNoise2(x * 0.8, y * 0.8) - 0.5) * 2;
+  const dy = (valueNoise2(x * 0.8 + 13, y * 0.8 + 4) - 0.5) * 2;
+  if (out) {
+    out[0] = dx;
+    out[1] = dy;
+    return out;
+  }
+  return [dx, dy];
+}
+
 export const PAPER_TILE_PX = PAPER_PX;

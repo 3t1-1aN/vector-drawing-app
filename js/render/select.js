@@ -6,6 +6,7 @@
 import { worldToScreen } from "../core/view.js";
 import { getBounds } from "../scene/element.js";
 import { isDarkBackground } from "../workspace/appearance.js";
+import { useSheetText } from "./text-style.js";
 
 const HANDLE_SIZE = 8;       // screen px square edge
 const ROT_HANDLE_OFFSET = 22; // screen px above top edge
@@ -120,11 +121,11 @@ export function drawArtboardsWorld(ctx, view, artboards) {
 export function drawArtboardLabels(ctx, view, artboards) {
   for (const a of artboards) {
     const tl = worldToScreen(a.x, a.y);
-    ctx.fillStyle = isDarkBackground() ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.55)";
-    ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
     ctx.textBaseline = "bottom";
     ctx.textAlign = "left";
+    const restore = useSheetText(ctx, { typewriter: true, px: 13 });
     ctx.fillText(a.name, tl.x + 6, tl.y - 4);
+    restore();
   }
 }
 

@@ -74,7 +74,9 @@ textarea {
   color: #cfcfd6;
   font-size: 16px;
   cursor: pointer;
-  z-index: 11;
+  /* Above the style wheel. On a small window the wheel fills the corner
+     this button sits in, and a lower layer makes the settings look gone. */
+  z-index: 20;
   backdrop-filter: blur(6px);
 }
 
@@ -97,7 +99,7 @@ textarea {
   position: fixed;
   top: 54px;
   right: 12px;
-  width: 232px;
+  width: min(232px, calc(100vw - 24px));
   max-height: calc(100dvh - 68px);
   overflow-y: auto;
   /* Reserve the gutter in both modes. Engineer overflows and Draw does not,
@@ -812,7 +814,112 @@ textarea {
 
 @media (max-width: 640px) {
   #panel {
-    width: min(232px, calc(100vw - 24px));
     max-height: calc(100dvh - 60px);
   }
+}
+
+/* ------------------------------------------------------------------
+   Home — pick a document, then the canvas. Same surfaces as the panel.
+------------------------------------------------------------------ */
+#homeBack {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(20, 20, 24, 0.85);
+  color: #cfcfd6;
+  font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  touch-action: manipulation;
+}
+
+#homeBack:hover { background: rgba(40, 40, 48, 0.95); color: #fff; }
+#homeBack:active { transform: translateY(1px); }
+#homeBack:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+#home {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: #1e1e22;
+}
+
+.home-card {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.home-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--panel-ink);
+}
+
+.home-choices {
+  display: grid;
+  gap: 12px;
+}
+
+.home-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 88px;
+  padding: 16px 18px;
+  text-align: left;
+  border-radius: 11px;
+  border: 1px solid var(--panel-line);
+  background: var(--panel-body);
+  box-shadow: var(--panel-shadow);
+  color: var(--panel-ink-hi);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.home-choice:hover { background: rgba(40, 41, 48, 0.98); }
+.home-choice:active { transform: translateY(1px); }
+.home-choice:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.home-choice-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.home-choice-note {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--panel-ink);
+}
+
+body.is-home #home { display: flex; }
+
+body.is-home #homeBack,
+body.is-home #panel,
+body.is-home #panelToggle,
+body.is-home #styleWheel,
+body.is-home #wheelDock,
+body.is-home #wheelPopover,
+body.is-home #colorWheelOverlay {
+  display: none !important;
 }

@@ -92,7 +92,7 @@ function drawOne(ctx, w, view) {
     // Placeholder axes (origin unknown until samples land).
     strokeAxes(ctx, gx, gy, gw, gh, 0.5, 0.5);
     ctx.fillStyle = "rgba(230, 230, 235, 0.55)";
-    ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.font = "13px \"Special Elite\", \"Courier Prime\", \"Courier New\", Courier, monospace";
     ctx.fillText(w.state.loading ? "…" : "no plot", gx, gy + gh / 2);
   } else {
     let minY = Infinity, maxY = -Infinity;
@@ -139,7 +139,7 @@ function drawOne(ctx, w, view) {
   }
 
   ctx.fillStyle = "rgba(220, 224, 232, 0.7)";
-  ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  ctx.font = "13px \"Special Elite\", \"Courier Prime\", \"Courier New\", Courier, monospace";
   ctx.fillText(truncate(`y = ${w.state.expr}`, 28), gx, y + height - 6);
   ctx.restore();
 }

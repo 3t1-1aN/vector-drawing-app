@@ -42,9 +42,11 @@ export const BRUSH_PRESETS = [
     label: "Pencil",
     tip: TIP_ROUND,
     sizeMul: 0.85,
-    alphaMul: 0.92,
+    alphaMul: 1,
     spacing: 0.09,
-    hardness: 0.55,
+    // The mark itself is brush/graphite.js. These tip fields only matter
+    // if that rasteriser declines a stroke and the stamp path takes over.
+    hardness: 0.4,
     // Graphite lays down in layers, so a little within-stroke buildup is
     // right — but only a little, or light pressure can never stay light.
     buildup: 0.3,
@@ -53,10 +55,12 @@ export const BRUSH_PRESETS = [
     alpha: { min: 0.16, gamma: 1.55 },
     vel: { width: -0.06, alpha: -0.16, texture: 0.5 },
     taper: { in: 1.2, out: 1.2, minScale: 0.35 },
-    grain: { strength: 0.55, scale: 1.0, speedGain: 0.35 },
+    grain: { strength: 0.78, scale: 1.0, speedGain: 0.28 },
     edgeNoise: 0.5,
     nib: null,
     swatch: { widthMul: 0.8, alphaMul: 0.62, dash: null },
+    // Screen pixels on the size ring: a sharp point through a blunt soft lead.
+    widthRange: { min: 1, max: 7.5, step: 0.5, presets: [1, 2, 4, 6] },
   },
   {
     id: "pen",
@@ -78,6 +82,8 @@ export const BRUSH_PRESETS = [
     edgeNoise: 0,
     nib: null,
     swatch: { widthMul: 1.0, alphaMul: 1.0, dash: null },
+    // A technical pen through a bold ballpoint. Nothing in between is a brush.
+    widthRange: { min: 0.5, max: 3, step: 0.1, presets: [0.5, 1, 2, 3] },
   },
   {
     id: "soft",
@@ -99,6 +105,8 @@ export const BRUSH_PRESETS = [
     edgeNoise: 0,
     nib: null,
     swatch: { widthMul: 1.7, alphaMul: 0.45, dash: null },
+    // A small round through a wash brush, still a drawing brush rather than a roller.
+    widthRange: { min: 3, max: 20, step: 0.5, presets: [3, 6, 12, 18] },
   },
   {
     id: "fountain",
@@ -125,6 +133,8 @@ export const BRUSH_PRESETS = [
       curveGain: 0.22,   // swell through direction changes
     },
     swatch: { widthMul: 1.25, alphaMul: 1.0, dash: null },
+    // Extra-fine nib through a broad stub.
+    widthRange: { min: 1, max: 8, step: 0.5, presets: [1, 2, 4, 7] },
   },
   {
     id: "marker",
@@ -145,6 +155,8 @@ export const BRUSH_PRESETS = [
     edgeNoise: 0.12,
     nib: null,
     swatch: { widthMul: 1.9, alphaMul: 0.42, dash: null },
+    // A fine marker through a broad chisel. Wider than a pen, short of a paint roller.
+    widthRange: { min: 4, max: 16, step: 0.5, presets: [4, 8, 12, 16] },
   },
   {
     id: "fill",
@@ -182,6 +194,11 @@ const LEGACY_IDS = { chalk: "soft" };
 export function getBrushPreset(id) {
   const key = LEGACY_IDS[id] || id;
   return BRUSH_PRESETS.find((p) => p.id === key) || BRUSH_PRESETS[1];
+}
+
+/** Pixel limits for the size ring. A fill has no tip, so it keeps the pen's numbers unused. */
+export function widthRangeFor(id) {
+  return getBrushPreset(id).widthRange || getBrushPreset("pen").widthRange;
 }
 
 /** True when a medium inks the area its path encloses rather than the path. */

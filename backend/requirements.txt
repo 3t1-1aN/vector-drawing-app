@@ -1,0 +1,11 @@
+# Install CPU PyTorch first (the default torch wheel is a 500MB+ CUDA build
+# and does not match the torchvision Pix2Text expects):
+#
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements.txt
+
+fastapi
+uvicorn
+pillow
+pix2text
+onnxruntime

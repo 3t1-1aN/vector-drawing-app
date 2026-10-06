@@ -1,5 +1,5 @@
 // tools/erase.js
-// Eraser: a disc the size of the current brush. Ink under it disappears as
+// Eraser: a disc sized on its own, far larger than a drawing tip. Ink under it disappears as
 // the pointer moves, and whatever is left of a stroke survives as its own
 // pieces, in the style it had. A filled shape has no honest partial state,
 // so touching one deletes the whole shape. One drag is still one undo step.
@@ -19,9 +19,20 @@ const state = {
   ops: null,         // replacements accumulated for this drag's one undo step
 };
 
-/** Half the current brush size, in world units. The disc the eraser and slice draw. */
+/** Screen-pixel diameter of the eraser. Whole pixels only, capped at 100 for now. */
+export const ERASER_RANGE = { min: 4, max: 100, step: 1, presets: [10, 25, 50, 100] };
+
+/** Half a screen-pixel diameter, in world units. Slice still uses the tip size. */
 export function brushRadiusWorld(zoom) {
-  return Math.max(0.5, (activeBrush.strokeWidth || 2) / 2) / Math.max(zoom, 1e-6);
+  return radiusFromDiameter(activeBrush.strokeWidth || 2, zoom);
+}
+
+function eraserRadiusWorld(zoom) {
+  return radiusFromDiameter(activeBrush.eraserWidth || ERASER_RANGE.min, zoom);
+}
+
+function radiusFromDiameter(diameter, zoom) {
+  return Math.max(0.5, diameter / 2) / Math.max(zoom, 1e-6);
 }
 
 function distToSegment(p, a, b) {
@@ -152,7 +163,7 @@ function applyErase(scene, trail, radiusFor) {
   for (const el of scene.elements.slice()) {
     const radius = radiusFor(el);
     if (!(radius > 0) || !withinReach(el, trail, radius)) continue;
-    if (isFilledMedium(el.style?.medium)) {
+    if (el.type === "text" || isFilledMedium(el.style?.medium)) {
       if (!fillTouched(el, trail, radius)) continue;
       ops.push({ removedId: el.id, removedSnapshot: cloneElement(el), pieces: [] });
       continue;
@@ -185,7 +196,7 @@ export function commitErase(app, trail, radiusFor) {
 /** Cut the new bit of trail into the scene and remember it for one undo. */
 function eraseStep(app, trail) {
   if (!trail || trail.length === 0) return;
-  const ops = applyErase(app.scene, trail, () => brushRadiusWorld(app.view.zoom));
+  const ops = applyErase(app.scene, trail, () => eraserRadiusWorld(app.view.zoom));
   if (ops.length === 0) return;
   if (!state.ops) state.ops = [];
   state.ops.push(...ops);
@@ -267,7 +278,7 @@ export const eraserTool = {
   /** The disc under the pointer. The ink it covers is already gone. */
   getEraser(app) {
     if (!state.cursor) return null;
-    return { x: state.cursor.x, y: state.cursor.y, r: brushRadiusWorld(app.view.zoom) };
+    return { x: state.cursor.x, y: state.cursor.y, r: eraserRadiusWorld(app.view.zoom) };
   },
 };
 

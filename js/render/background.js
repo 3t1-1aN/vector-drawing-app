@@ -149,8 +149,16 @@ export function isPaperFlat() {
   return !appearance.paperTexture && appearance.background !== "transparent";
 }
 
-/** Fill the viewport. `view` locks the sheet to the page while panning. */
-export function drawBackground(ctx, view) {
+// The sheet shader fills the viewport. While a stroke is being drawn the
+// camera is still, so the shaded frame is kept and blitted instead of
+// redrawn on every animation frame.
+let sheetCache = null;
+let sheetKey = "";
+
+/** Fill the viewport. `view` locks the sheet to the page while panning.
+ *  `clip` is the notebook page in CSS pixels, so a clipped sheet is not
+ *  reused as a full-bleed one. */
+export function drawBackground(ctx, view, clip) {
   const dpr = window.devicePixelRatio || 1;
   const destW = ctx.canvas.width / dpr;
   const destH = ctx.canvas.height / dpr;
@@ -169,6 +177,13 @@ export function drawBackground(ctx, view) {
 
   const preset = BACKGROUNDS[appearance.background] || BACKGROUNDS.custom;
   const camera = view || { panX: 0, panY: 0, zoom: 1 };
+  const clipKey = clip ? `${clip.x}|${clip.y}|${clip.w}|${clip.h}` : "full";
+  const key = `${ctx.canvas.width}x${ctx.canvas.height}|${camera.panX}|${camera.panY}|${camera.zoom}|${base}|${appearance.background}|${clipKey}`;
+  if (sheetCache && sheetKey === key) {
+    ctx.drawImage(sheetCache, 0, 0, destW, destH);
+    return;
+  }
+
   const painted = paintPaper(ctx, {
     destW,
     destH,
@@ -181,7 +196,17 @@ export function drawBackground(ctx, view) {
   if (!painted) {
     ctx.fillStyle = getPattern(ctx);
     ctx.fillRect(0, 0, destW, destH);
+    return;
   }
+  if (!sheetCache || sheetCache.width !== ctx.canvas.width || sheetCache.height !== ctx.canvas.height) {
+    sheetCache = document.createElement("canvas");
+    sheetCache.width = ctx.canvas.width;
+    sheetCache.height = ctx.canvas.height;
+  }
+  const sheetCtx = sheetCache.getContext("2d");
+  sheetCtx.setTransform(1, 0, 0, 1, 0, 0);
+  sheetCtx.drawImage(ctx.canvas, 0, 0);
+  sheetKey = key;
 }
 
 /**

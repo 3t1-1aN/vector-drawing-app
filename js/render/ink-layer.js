@@ -12,6 +12,8 @@ import { applyViewTransform } from "../core/canvas.js";
 import { beginBrushFrame } from "../brush/cache.js";
 import { drawCommitted } from "./elements.js";
 import { inkSceneRev } from "./ink-rev.js";
+import { appearance } from "../workspace/appearance.js";
+import { isEngineering } from "../workspace/mode.js";
 
 let layer = null;
 let layerCtx = null;
@@ -24,6 +26,22 @@ function mixStr(h, s) {
 }
 
 /** Selection outlines and slice-doomed greying are not part of inkSceneRev. */
+function sheetKey(scene) {
+  const a = appearance;
+  let h = 0;
+  const boards = scene.artboards || [];
+  for (const b of boards) {
+    h = Math.imul(h ^ ((b.x * 10) | 0), 0x9e3779b1) | 0;
+    h = Math.imul(h ^ ((b.y * 10) | 0), 0x9e3779b1) | 0;
+    h = Math.imul(h ^ ((b.w * 10) | 0), 0x9e3779b1) | 0;
+    h = Math.imul(h ^ ((b.h * 10) | 0), 0x9e3779b1) | 0;
+  }
+  return [
+    a.background, a.backgroundColor, a.paperTexture, a.gridVisible, a.gridType,
+    a.gridOpacity, a.gridColor, isEngineering() ? 1 : 0, boards.length, h,
+  ].join("|");
+}
+
 function overlayKey(scene, doomed) {
   let h = scene.selected.size;
   for (const id of scene.selected) h = mixStr(h, id);
@@ -58,14 +76,16 @@ export function drawInkLayer(ctx, scene, view, doomed) {
   ensure(w, h);
 
   const dpr = window.devicePixelRatio || 1;
-  const next = `${w}x${h}|${dpr}|${view.zoom}|${view.panX}|${view.panY}|${inkSceneRev()}|${overlayKey(scene, doomed)}`;
+  const next = `${w}x${h}|${dpr}|${view.zoom}|${view.panX}|${view.panY}|${inkSceneRev()}|${overlayKey(scene, doomed)}|${sheetKey(scene)}`;
   if (next !== key) {
     mode = "rebuild";
     layerCtx.setTransform(1, 0, 0, 1, 0, 0);
     layerCtx.globalAlpha = 1;
     layerCtx.filter = "none";
     layerCtx.globalCompositeOperation = "source-over";
-    layerCtx.clearRect(0, 0, w, h);
+    // Paper and grid are already on the stage. Copy them under the ink so
+    // a pencil multiplies into the sheet instead of into empty pixels.
+    layerCtx.drawImage(ctx.canvas, 0, 0);
     layerCtx.lineCap = "round";
     layerCtx.lineJoin = "round";
     applyViewTransform(layerCtx, view);
@@ -78,9 +98,15 @@ export function drawInkLayer(ctx, scene, view, doomed) {
 
   const prev = ctx.getTransform();
   const prevAlpha = ctx.globalAlpha;
+  const prevOp = ctx.globalCompositeOperation;
+  const prevFilter = ctx.filter;
   ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.filter = "none";
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(layer, 0, 0);
   ctx.setTransform(prev.a, prev.b, prev.c, prev.d, prev.e, prev.f);
   ctx.globalAlpha = prevAlpha;
+  ctx.globalCompositeOperation = prevOp;
+  ctx.filter = prevFilter;
 }

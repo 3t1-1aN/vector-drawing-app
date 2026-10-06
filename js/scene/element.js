@@ -12,8 +12,12 @@
 //   circle:   { id, type:'circle', cx, cy, r, style }
 //   triangle: { id, type:'triangle', corners:[3], sides:[3], style }
 //   path:     { id, type:'path',   points:[{x,y,p,v}], style }
+//   text:     { id, type:'text',   x, y, text, size, seed, style }
+// Closed shapes may also carry a centered label:
+//   label:    { text, size, seed } drawn in the middle of the shape.
 
 import { brushToStyle } from "../brush/active-brush.js";
+import { textBounds } from "../render/type-text.js";
 import { isFilledMedium } from "../brush/presets.js";
 import { touchElement } from "../render/ink-rev.js";
 
@@ -36,6 +40,7 @@ export function cloneElement(el) {
   if (el.corners) c.corners = el.corners.map((p) => ({ ...p }));
   if (el.points) c.points = el.points.map((p) => ({ ...p }));
   if (el.sides) c.sides = el.sides.slice();
+  if (el.label) c.label = { ...el.label };
   return c;
 }
 
@@ -78,6 +83,8 @@ export function getBounds(el) {
       return bboxOfPoints(el.corners);
     case "path":
       return bboxOfPoints(el.points);
+    case "text":
+      return textBounds(el);
     default:
       return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   }
@@ -186,6 +193,13 @@ function pointInRing(ring, x, y) {
  * Returns true if the point lies on the element's outline.
  */
 export function hitTest(el, worldX, worldY, toleranceWorld) {
+  if (el.type === "text") {
+    const b = getBounds(el);
+    return (
+      worldX >= b.minX - toleranceWorld && worldX <= b.maxX + toleranceWorld &&
+      worldY >= b.minY - toleranceWorld && worldY <= b.maxY + toleranceWorld
+    );
+  }
   // A filled medium inks a solid area, so it has to be pickable anywhere
   // inside it and not just along the contour. Testing even-odd keeps the
   // holes a self-crossing stroke punched click-through, the way they look.
@@ -207,6 +221,24 @@ export function hitTest(el, worldX, worldY, toleranceWorld) {
     if (distPointToSegment(p, a, b) <= toleranceWorld) return true;
   }
   return false;
+}
+
+/** A closed shape that can carry a centered label. */
+export function holdsCenteredText(el) {
+  return el.type === "rect" || el.type === "square" || el.type === "circle" || el.type === "triangle";
+}
+
+/**
+ * Hit the stroke or the interior. Double-tap to type uses this so the
+ * middle of an unfilled box is a target, not only its outline.
+ */
+export function hitTestBody(el, worldX, worldY, toleranceWorld) {
+  if (el.type === "circle") {
+    return Math.hypot(worldX - el.cx, worldY - el.cy) <= el.r + toleranceWorld;
+  }
+  if (hitTest(el, worldX, worldY, toleranceWorld)) return true;
+  const ring = ringOf(el);
+  return !!(ring && ring.length >= 3 && pointInRing(ring, worldX, worldY));
 }
 
 /** Bounding-box hit test (used by marquee selection). */
@@ -249,6 +281,10 @@ export function translateElement(el, dx, dy) {
     case "path":
       el.points = el.points.map((p) => offsetPoint(p, dx, dy));
       break;
+    case "text":
+      el.x += dx;
+      el.y += dy;
+      break;
   }
   touchElement(el);
 }
@@ -289,7 +325,7 @@ export function bakeToPath(el) {
   }
   // Mutate into a path while keeping id + style.
   Object.keys(el).forEach((k) => {
-    if (k !== "id" && k !== "style" && k !== "type") delete el[k];
+    if (k !== "id" && k !== "style" && k !== "type" && k !== "label") delete el[k];
   });
   el.type = "path";
   el.points = points;
@@ -360,6 +396,13 @@ export function transformElement(el, ox, oy, fx, fy, angle = 0) {
     case "path":
       el.points = el.points.map(tp);
       break;
+    case "text": {
+      const p = tp({ x: el.x, y: el.y });
+      el.x = p.x;
+      el.y = p.y;
+      el.size = Math.max(8, (el.size || 17) * Math.abs(fx));
+      break;
+    }
   }
 
   // Square may stop being square after non-uniform scale; demote to rect.
@@ -389,6 +432,8 @@ export function isDegenerate(el) {
       return !el.corners || el.corners.length < 3;
     case "path":
       return el.points.length < 2;
+    case "text":
+      return !el.text || !String(el.text).trim();
     default:
       return true;
   }

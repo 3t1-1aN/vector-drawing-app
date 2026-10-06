@@ -1,7 +1,10 @@
 // workspace/appearance.js
-// Central workspace appearance state: background preset, grid visibility,
-// grid type and tint. Render modules read this every frame; the panel and
-// project I/O mutate it.
+// Paper and grid for the open document. Render modules read `appearance`
+// every frame; the panel and project I/O mutate it. The object is a binding:
+// each document owns a record from createAppearance(), and bindAppearance()
+// points the binding at that record so the choice stays with the document.
+
+import { bindable } from "../core/bindable.js";
 
 export const BACKGROUNDS = {
   "paper-warm":  { label: "Warm",      color: "#F4F0E6", grain: 10 },
@@ -15,18 +18,25 @@ export const BACKGROUNDS = {
 
 export const GRID_TYPES = ["graph", "dot", "lined", "isometric"];
 
-export const appearance = {
-  background: "paper-warm",
-  backgroundColor: "#F4F0E6", // used when background === "custom"
-  // Paper grain. Off leaves the flat base colour, which is what you want
-  // for clean export-style output and on low-contrast displays where the
-  // tooth reads as dirt. The preset's colour is unchanged either way.
-  paperTexture: true,
-  gridVisible: true,
-  gridType: "graph", // graph | dot | lined | isometric
-  gridOpacity: 0.45,
-  gridColor: null, // hex string, or null = auto-contrast with background
-};
+export function createAppearance() {
+  return {
+    background: "paper-warm",
+    backgroundColor: "#F4F0E6", // used when background === "custom"
+    // Paper grain. Off leaves the flat base colour, which is what you want
+    // for clean export-style output and on low-contrast displays where the
+    // tooth reads as dirt. The preset's colour is unchanged either way.
+    paperTexture: true,
+    // New drawings start with the grid off. Turning it on writes this record.
+    gridVisible: false,
+    gridType: "graph", // graph | dot | lined | isometric
+    gridOpacity: 0.45,
+    gridColor: null, // hex string, or null = auto-contrast with background
+  };
+}
+
+const appearanceBinding = bindable(createAppearance());
+export const appearance = appearanceBinding.proxy;
+export const bindAppearance = appearanceBinding.bind;
 
 /** Resolved base color of the current background (hex); null = transparent. */
 export function getBackgroundBaseColor() {

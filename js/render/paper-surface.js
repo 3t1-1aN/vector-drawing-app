@@ -145,7 +145,17 @@ void main() {
     }
   }
   if (uMode > 0.5) {
-    float absorb = clamp(max(fa, fb) * uInk + speck * uImp * uInk + abs(g) * uGrain * uInk, 0.0, 0.85);
+    // Colour mode keeps grain faint on purpose. This mask is the ink the
+    // sheet refuses. A pencil stays a flat grey unless that refusal is dense,
+    // and a stretched octave turns the same mask into a screen, so the tooth
+    // stays in round clumps a couple of pixels across.
+    float gs = max(uGrainS, 0.001);
+    float n = vn(w / (2.4 * gs) + 41.0) * 0.46;
+    n += vn(w / (5.5 * gs) + 17.0) * 0.34;
+    n += vn(w / (1.5 * gs) + 3.0) * 0.20;
+    float skip = clamp((n - 0.36) * 2.6, 0.0, 1.0);
+    float fiber = clamp(max(fa, fb), 0.0, 1.0);
+    float absorb = clamp(skip * 0.82 + fiber * 0.45 + speck * 0.3, 0.0, 0.88);
     gl_FragColor = vec4(1.0, 1.0, 1.0, absorb);
     return;
   }
@@ -338,10 +348,24 @@ export function renderToothTile() {
     zoom: 1,
     mode: 1,
   });
+  // Read the buffer directly. drawImage from a WebGL canvas composites the
+  // colour and can throw away the alpha this mask is made of.
+  const gl = r.gl;
+  const w = r.canvas.width;
+  const h = r.canvas.height;
+  const pixels = new Uint8Array(w * h * 4);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
   toothCanvas = document.createElement("canvas");
-  toothCanvas.width = TOOTH_PX;
-  toothCanvas.height = TOOTH_PX;
-  toothCanvas.getContext("2d").drawImage(r.canvas, 0, 0);
+  toothCanvas.width = w;
+  toothCanvas.height = h;
+  const ctx = toothCanvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  const row = w * 4;
+  for (let y = 0; y < h; y++) {
+    const src = (h - 1 - y) * row;
+    img.data.set(pixels.subarray(src, src + row), y * row);
+  }
+  ctx.putImageData(img, 0, 0);
   return toothCanvas;
 }
 

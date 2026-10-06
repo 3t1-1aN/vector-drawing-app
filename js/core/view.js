@@ -13,6 +13,74 @@ export const view = {
   zoom: 1.0,
 };
 
+/** CSS pixels of desk kept around a notebook page. */
+export const PAGE_MARGIN = 48;
+
+// Null on the infinite canvas. A notebook sets the page rectangle so pan and
+// zoom stay on that sheet instead of traveling into empty space.
+let pageConstraint = null;
+
+function viewportSize() {
+  return { w: window.innerWidth, h: window.innerHeight };
+}
+
+function axisMargin(viewSize) {
+  return Math.min(PAGE_MARGIN, Math.max(0, viewSize / 2 - 1));
+}
+
+/** `page` is {x, y, width, height} in world units, or null to clear. */
+export function setPageConstraint(page) {
+  if (!page) {
+    pageConstraint = null;
+    return;
+  }
+  pageConstraint = {
+    minX: page.x,
+    minY: page.y,
+    maxX: page.x + page.width,
+    maxY: page.y + page.height,
+  };
+}
+
+function pageMinZoom() {
+  const { w, h } = viewportSize();
+  const b = pageConstraint;
+  const pw = Math.max(1, b.maxX - b.minX);
+  const ph = Math.max(1, b.maxY - b.minY);
+  const availW = Math.max(1, w - axisMargin(w) * 2);
+  const availH = Math.max(1, h - axisMargin(h) * 2);
+  return clamp(Math.min(availW / pw, availH / ph), ZOOM_MIN, ZOOM_MAX);
+}
+
+// When the page fits, hold it centered so the desk is only the margin around
+// the sheet. When it is zoomed larger than the viewport, allow at most
+// `margin` of desk past an edge — pan moves across the page, not off it.
+function clampAxis(pan, minWorld, maxWorld, zoom, viewSize) {
+  const margin = axisMargin(viewSize);
+  const pageSize = (maxWorld - minWorld) * zoom;
+  const atStart = margin - minWorld * zoom;
+  const atEnd = viewSize - margin - maxWorld * zoom;
+  if (pageSize <= viewSize - margin * 2) return (atStart + atEnd) / 2;
+  return clamp(pan, Math.min(atStart, atEnd), Math.max(atStart, atEnd));
+}
+
+export function constrainView() {
+  if (!pageConstraint) return;
+  const { w, h } = viewportSize();
+  const minZoom = pageMinZoom();
+  if (view.zoom < minZoom) {
+    view.zoom = minZoom;
+    const b = pageConstraint;
+    view.panX = w / 2 - ((b.minX + b.maxX) / 2) * view.zoom;
+    view.panY = h / 2 - ((b.minY + b.maxY) / 2) * view.zoom;
+  } else if (view.zoom > ZOOM_MAX) {
+    view.zoom = ZOOM_MAX;
+  }
+  const b = pageConstraint;
+  view.panX = clampAxis(view.panX, b.minX, b.maxX, view.zoom, w);
+  view.panY = clampAxis(view.panY, b.minY, b.maxY, view.zoom, h);
+}
+
 export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -48,6 +116,7 @@ export function getVisibleWorldBounds() {
 export function panBy(dxScreen, dyScreen) {
   view.panX += dxScreen;
   view.panY += dyScreen;
+  constrainView();
 }
 
 /**
@@ -56,11 +125,13 @@ export function panBy(dxScreen, dyScreen) {
  */
 export function zoomAt(screenX, screenY, factor) {
   const world = screenToWorld(screenX, screenY);
-  const newZoom = clamp(view.zoom * factor, ZOOM_MIN, ZOOM_MAX);
+  const minZoom = pageConstraint ? pageMinZoom() : ZOOM_MIN;
+  const newZoom = clamp(view.zoom * factor, minZoom, ZOOM_MAX);
   if (newZoom === view.zoom) return;
   view.zoom = newZoom;
   view.panX = screenX - world.x * view.zoom;
   view.panY = screenY - world.y * view.zoom;
+  constrainView();
 }
 
 /** Set view so the given world bounds fit centered in the viewport. */
@@ -77,4 +148,5 @@ export function fitToBounds(bounds, padding = 40) {
   view.zoom = zoom;
   view.panX = cssW / 2 - ((bounds.minX + bounds.maxX) / 2) * zoom;
   view.panY = cssH / 2 - ((bounds.minY + bounds.maxY) / 2) * zoom;
+  constrainView();
 }

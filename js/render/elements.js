@@ -8,6 +8,8 @@ import { getBounds, getRectCorners } from "../scene/element.js";
 import { getVisibleWorldBounds } from "../core/view.js";
 import { isDarkBackground } from "../workspace/appearance.js";
 import { beginBrushFrame, drawBrushElement } from "../brush/cache.js";
+import { drawTypewritten } from "./type-text.js";
+import { labelFrame } from "./text-frame.js";
 
 const SELECTED_COLOR = "rgba(255, 170, 40, 0.95)";
 
@@ -80,6 +82,9 @@ export function drawCommitted(ctx, scene, view, doomed) {
     const selected = scene.isSelected(el.id);
     const claimed = doomed && doomed.has(el.id);
     if (!selected && !claimed && !onScreen(el, visible, view)) continue;
+    // Notes are drawn after the ink bitmap. The typewriter filter is an SVG
+    // filter in the page, and it does not survive the offscreen ink canvas.
+    if (el.type === "text") continue;
     if (claimed) {
       // alphaScale, not globalAlpha: the brush blit replaces globalAlpha
       // with its own, so the dimming has to travel in with the draw.
@@ -111,6 +116,10 @@ export function drawCommitted(ctx, scene, view, doomed) {
  */
 export function drawLivePreview(ctx, view, preview) {
   if (!preview || !preview.element) return;
+  if (preview.element.type === "text") {
+    drawTypewritten(ctx, preview.element, { caret: !!preview.caret, frame: preview.frame || null });
+    return;
+  }
   if (preview.recognized) {
     ctx.strokeStyle = recognizedColor();
     ctx.lineWidth = (preview.element.style?.strokeWidth || 2) / view.zoom;
@@ -124,7 +133,46 @@ export function drawLivePreview(ctx, view, preview) {
   }
   // The in-flight stroke changes every frame, so it renders straight
   // through rather than churning a cache entry per frame.
-  drawBrushElement(ctx, preview.element, view, { alphaScale: 0.9, cache: false });
+  const pencil = (preview.element.style?.medium || "pen") === "pencil";
+  drawBrushElement(ctx, preview.element, view, { alphaScale: pencil ? 1 : 0.9, cache: false });
+}
+
+/**
+ * Committed notes and centered labels. Called on the on-screen canvas, after
+ * the ink bitmap, so the ribbon filter still resolves.
+ */
+export function drawTexts(ctx, scene, view, preview, doomed) {
+  const skipText = preview?.editingId || null;
+  const skipHost = preview?.hostId || null;
+  const visible = getVisibleWorldBounds();
+  for (const el of scene.elements) {
+    if (el.type === "text") {
+      if (el.id === skipText) continue;
+      if (!onScreen(el, visible, view) && !scene.isSelected(el.id)) continue;
+      const claimed = doomed && doomed.has(el.id);
+      ctx.save();
+      if (claimed) ctx.globalAlpha = 0.45;
+      drawTypewritten(ctx, el);
+      ctx.restore();
+      if (scene.isSelected(el.id) || claimed) {
+        const b = getBounds(el);
+        ctx.save();
+        ctx.strokeStyle = claimed ? "rgba(120, 120, 120, 0.7)" : SELECTED_COLOR;
+        ctx.lineWidth = 1 / view.zoom;
+        ctx.setLineDash([]);
+        ctx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
+        ctx.restore();
+      }
+      continue;
+    }
+    if (!el.label || el.id === skipHost || !el.label.text) continue;
+    const frame = labelFrame(el);
+    if (!frame) continue;
+    ctx.save();
+    if (doomed && doomed.has(el.id)) ctx.globalAlpha = 0.45;
+    drawTypewritten(ctx, { ...el.label, style: el.style }, { frame });
+    ctx.restore();
+  }
 }
 
 /** Bounding-box overlap test, padded for the widest the brush can spread. */
