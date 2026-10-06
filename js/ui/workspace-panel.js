@@ -201,6 +201,14 @@ function isDarkPreview() {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
 }
 
+// role="switch" reads aria-checked. aria-pressed stays so the existing
+// switch CSS, which keys off it, does not need a second rule.
+function setSwitch(btn, on) {
+  const value = String(!!on);
+  btn.setAttribute("aria-checked", value);
+  btn.setAttribute("aria-pressed", value);
+}
+
 /**
  * Wire the canvas controls. `onChange` is called after any mutation so the
  * host can persist or re-render; the panel repaints its own previews.
@@ -374,10 +382,8 @@ export function initWorkspacePanel({ onChange = () => {} } = {}) {
     }
     repaintPapers();
     customColor.value = appearance.backgroundColor;
-    textureToggle.setAttribute("aria-pressed", String(appearance.paperTexture));
-    if (mathToggle) {
-      mathToggle.setAttribute("aria-pressed", String(mathAssist.enabled));
-    }
+    setSwitch(textureToggle, appearance.paperTexture);
+    if (mathToggle) setSwitch(mathToggle, mathAssist.enabled);
 
     for (const btn of patternRow.querySelectorAll("button")) {
       const on = btn.dataset.grid === appearance.gridType;
@@ -385,7 +391,7 @@ export function initWorkspacePanel({ onChange = () => {} } = {}) {
       btn.setAttribute("aria-pressed", String(on));
     }
 
-    gridToggle.setAttribute("aria-pressed", String(appearance.gridVisible));
+    setSwitch(gridToggle, appearance.gridVisible);
     // The pattern and its adjustments are meaningless with the grid off, so
     // they dim and go inert rather than vanishing — the row is the clearest
     // statement of what the switch controls.
