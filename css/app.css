@@ -56,6 +56,15 @@ textarea {
   -webkit-touch-callout: none;
 }
 
+/* A desynchronized full-viewport canvas is promoted to its own overlay on
+   tablets, and that overlay takes the taps aimed at the gallery. Park it
+   offscreen until a drawing is open so the buttons receive the touch. */
+body.is-home #stage {
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate3d(-120vw, 0, 0);
+}
+
 #stage.panning { cursor: grabbing; }
 #stage.pannable { cursor: grab; }
 
@@ -850,8 +859,17 @@ textarea {
 #home {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  left: 0;
+  /* inset: 0 follows the large layout viewport. On a tablet that reaches
+     under the browser bar, so the plus, which sits at the bottom of this
+     column, was clipped off the visible screen. svh stays above that bar. */
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100svh;
   z-index: 30;
+  overflow: hidden;
   background: #f3f1ee;
   color: #1c1c1f;
   font-family: "Special Elite", "Courier Prime", "Courier New", Courier, monospace;
@@ -862,7 +880,9 @@ textarea {
   z-index: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   padding: 28px 16px;
+  padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
   border-right: 1px solid rgba(28, 28, 31, 0.08);
 }
 

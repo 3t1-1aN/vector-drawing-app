@@ -1330,10 +1330,23 @@ function wireHome() {
   });
   const clearPress = (event) => {
     if (!galleryPress) return;
-    const moved = event && Math.hypot(event.clientX - galleryPress.x, event.clientY - galleryPress.y) > 8;
+    const press = galleryPress;
+    const moved = event && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 8;
     if (!event || moved || event.type !== "pointermove") {
-      clearTimeout(galleryPress.timer);
+      clearTimeout(press.timer);
       galleryPress = null;
+    }
+    // A finger or stylus on a tablet often never produces a click (the canvas
+    // overlay, or a scrollable sheet, eats it). Open on the lift instead.
+    // The click that does follow is swallowed so the drawing is not entered twice.
+    if (event && event.type === "pointerup" && !moved && event.pointerType !== "mouse") {
+      const swallow = (clickEvent) => {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+      };
+      window.addEventListener("click", swallow, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 700);
+      openDeskEntry(press.id);
     }
   };
   sheets.addEventListener("pointermove", clearPress);
