@@ -32,21 +32,56 @@
   </svg>
   <canvas id="stage"></canvas>
 
-  <button id="homeBack" type="button" title="Home">Home</button>
+  <button id="homeBack" type="button" title="Gallery" aria-label="Gallery">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+    </svg>
+  </button>
 
   <div id="home">
-    <div class="home-card">
-      <p class="home-kicker">New drawing</p>
-      <div class="home-choices">
-        <button type="button" id="homeInfinite" class="home-choice">
-          <span class="home-choice-title">Infinite note</span>
-          <span class="home-choice-note">An open canvas. Pan and zoom without a page edge.</span>
-        </button>
-        <button type="button" id="homeNotebook" class="home-choice">
-          <span class="home-choice-title">Notebook</span>
-          <span class="home-choice-note">One A4 page. Zoom into the sheet; the view stays on the page.</span>
-        </button>
+    <aside id="homeSide" aria-label="Gallery">
+      <p class="home-brand">Gallery</p>
+      <nav>
+        <button type="button" data-filter="all" aria-pressed="true">All</button>
+        <button type="button" data-filter="infinite" aria-pressed="false">Infinite notes</button>
+        <button type="button" data-filter="notebook" aria-pressed="false">Notebooks</button>
+      </nav>
+      <div class="home-new">
+        <div id="homeChooser" class="home-chooser" hidden>
+          <div id="homeChooserKinds">
+            <button type="button" id="homeNotebook">
+              <strong>Notebook</strong>
+              <span>A full-screen page</span>
+            </button>
+            <button type="button" id="homeInfinite">
+              <strong>Infinite note</strong>
+              <span>An open canvas</span>
+            </button>
+          </div>
+          <form id="homeNotebookSetup" class="home-notebook-setup" hidden>
+            <label class="home-setup-name">
+              <span>Name</span>
+              <input id="homeNotebookName" type="text" maxlength="80" autocomplete="off" />
+            </label>
+            <label class="home-setup-classic">
+              <input id="homeNotebookClassic" type="checkbox" />
+              <span>Classic</span>
+            </label>
+            <div class="home-setup-actions">
+              <button type="button" id="homeNotebookCancel">Back</button>
+              <button type="submit" id="homeNotebookCreate">Create</button>
+            </div>
+          </form>
+        </div>
+        <button type="button" id="homeAdd" aria-expanded="false" aria-label="New drawing">+</button>
       </div>
+    </aside>
+    <div id="homeMain">
+      <div id="homeSheets"></div>
+      <p id="homeEmpty" class="home-empty">No drawings yet</p>
     </div>
   </div>
 

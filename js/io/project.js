@@ -12,8 +12,24 @@ import { touchScene } from "../render/ink-rev.js";
 
 const FORMAT_VERSION = 2;
 
-export function serializeProject(scene, extras = {}) {
+function cloneElements(list) {
+  return (list || []).map((el) => cloneElement(el));
+}
+
+function clonePage(page) {
   return {
+    x: page.x || 0,
+    y: page.y || 0,
+    width: page.width,
+    height: page.height,
+    elements: cloneElements(page.elements),
+    math: page.math ? structuredClone(page.math) : null,
+  };
+}
+
+export function serializeProject(scene, extras = {}) {
+  const { pages, pageIndex, classic, kind, ...rest } = extras;
+  const data = {
     format: "vda",
     version: FORMAT_VERSION,
     view: { panX: view.panX, panY: view.panY, zoom: view.zoom },
@@ -22,9 +38,16 @@ export function serializeProject(scene, extras = {}) {
     workspace: { ...workspace },
     brush: { ...activeBrush },
     artboards: scene.artboards.map((a) => ({ ...a })),
-    elements: scene.elements.map((el) => cloneElement(el)),
-    ...extras,
+    elements: cloneElements(scene.elements),
+    ...rest,
   };
+  if (pages && pages.length) {
+    data.kind = kind || "notebook";
+    data.classic = !!classic;
+    data.pageIndex = pageIndex || 0;
+    data.pages = pages.map(clonePage);
+  }
+  return data;
 }
 
 export function deserializeProject(data, scene) {
@@ -49,9 +72,34 @@ export function deserializeProject(data, scene) {
     setWorkspaceMode("engineer");
   }
   scene.artboards = (data.artboards || []).map((a) => ({ ...a }));
-  scene.elements = (data.elements || []).map((el) => createIdElement(el.type, stripId(el)));
   scene.clearSelection();
+  const restoredPages = restorePages(data.pages);
+  if (restoredPages) {
+    const index = Math.max(0, Math.min(data.pageIndex || 0, restoredPages.length - 1));
+    scene.elements = restoredPages[index].elements;
+    touchScene();
+    return {
+      pages: restoredPages,
+      pageIndex: index,
+      classic: !!data.classic,
+      kind: data.kind || "notebook",
+    };
+  }
+  scene.elements = (data.elements || []).map((el) => createIdElement(el.type, stripId(el)));
   touchScene();
+  return null;
+}
+
+function restorePages(pages) {
+  if (!Array.isArray(pages) || !pages.length) return null;
+  return pages.map((page) => ({
+    x: page.x || 0,
+    y: page.y || 0,
+    width: page.width,
+    height: page.height,
+    elements: (page.elements || []).map((el) => createIdElement(el.type, stripId(el))),
+    math: page.math || null,
+  }));
 }
 
 // Re-hydrate an element from saved data without letting it keep a stale id

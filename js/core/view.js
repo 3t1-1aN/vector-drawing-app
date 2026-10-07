@@ -13,27 +13,33 @@ export const view = {
   zoom: 1.0,
 };
 
-/** CSS pixels of desk kept around a notebook page. */
+/** CSS pixels of desk kept around a notebook page. Cover fit uses none. */
 export const PAGE_MARGIN = 48;
 
 // Null on the infinite canvas. A notebook sets the page rectangle so pan and
 // zoom stay on that sheet instead of traveling into empty space.
+// Cover fit scales the sheet until it meets every edge of the window.
 let pageConstraint = null;
+let pageCover = false;
 
 function viewportSize() {
   return { w: window.innerWidth, h: window.innerHeight };
 }
 
 function axisMargin(viewSize) {
+  if (pageCover) return 0;
   return Math.min(PAGE_MARGIN, Math.max(0, viewSize / 2 - 1));
 }
 
-/** `page` is {x, y, width, height} in world units, or null to clear. */
-export function setPageConstraint(page) {
+/** `page` is {x, y, width, height} in world units, or null to clear.
+ *  `options.cover` fits the sheet so it fills the window, with no desk. */
+export function setPageConstraint(page, options = {}) {
   if (!page) {
     pageConstraint = null;
+    pageCover = false;
     return;
   }
+  pageCover = options.cover === true;
   pageConstraint = {
     minX: page.x,
     minY: page.y,
@@ -49,7 +55,10 @@ function pageMinZoom() {
   const ph = Math.max(1, b.maxY - b.minY);
   const availW = Math.max(1, w - axisMargin(w) * 2);
   const availH = Math.max(1, h - axisMargin(h) * 2);
-  return clamp(Math.min(availW / pw, availH / ph), ZOOM_MIN, ZOOM_MAX);
+  const fit = pageCover
+    ? Math.max(availW / pw, availH / ph)
+    : Math.min(availW / pw, availH / ph);
+  return clamp(fit, ZOOM_MIN, ZOOM_MAX);
 }
 
 // When the page fits, hold it centered so the desk is only the margin around

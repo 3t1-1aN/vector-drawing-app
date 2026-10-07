@@ -14,24 +14,57 @@ export const PX_PER_MM = 96 / 25.4;
 export const A4_WIDTH_MM = 210;
 export const A4_HEIGHT_MM = 297;
 
-export function createDocument(kind) {
+/** CSS-pixel size of a notebook page that fills the window at zoom 1. */
+export function notebookPageSize() {
+  return {
+    width: Math.max(1, window.innerWidth || 1),
+    height: Math.max(1, window.innerHeight || 1),
+  };
+}
+
+export function createNotebookPage(width, height) {
+  return {
+    x: 0,
+    y: 0,
+    width,
+    height,
+    elements: [],
+    math: null,
+  };
+}
+
+/** Lined paper, grain, and no math. The pencil itself is applied by the app. */
+export function applyClassicLook(doc) {
+  doc.classic = true;
+  doc.mathAssist = false;
+  const look = doc.appearance;
+  look.background = "paper-warm";
+  look.backgroundColor = "#F4F0E6";
+  look.paperTexture = true;
+  look.gridVisible = true;
+  look.gridType = "lined";
+  look.gridOpacity = 0.45;
+  look.gridColor = null;
+}
+
+export function createDocument(kind, options = {}) {
   const notebook = kind === "notebook";
   const doc = {
     kind: notebook ? "notebook" : "infinite",
-    // Further pages append here. Only pages[0] is shown until page-flip exists.
     pages: [],
+    pageIndex: 0,
+    classic: false,
     appearance: createAppearance(),
     scale: createScaleSettings(),
     workspace: createWorkspaceState(),
     mathAssist: true,
   };
   if (notebook) {
-    doc.pages.push({
-      x: 0,
-      y: 0,
-      width: A4_WIDTH_MM * PX_PER_MM,
-      height: A4_HEIGHT_MM * PX_PER_MM,
-    });
+    const size = notebookPageSize();
+    const width = options.pageWidth || size.width;
+    const height = options.pageHeight || size.height;
+    doc.pages.push(createNotebookPage(width, height));
+    if (options.classic) applyClassicLook(doc);
   }
   return doc;
 }
